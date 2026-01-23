@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ademhalingsvisualisatie</title>
+    <style>
+        body { 
+            margin: 0; 
+            background-color: #2c3e50; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            font-family: sans-serif; 
+        }
+
+        .container { 
+            background-color: #34495e; 
+            padding: 10px; /* Iets minder padding voor mobiel */
+            border-radius: 10px; 
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); 
+            
+            /* --- RESPONSIVE FIX --- */
+            width: 95%;       /* Neem 95% van de breedte van het scherm */
+            max-width: 600px; /* Maar nooit breder dan 600px */
+            box-sizing: border-box; /* Zorgt dat padding niet de breedte vergroot */
+        }
+
+        #breathingCanvas { 
+            display: block; 
+            background-color: #2c3e50;
+            
+            /* --- RESPONSIVE FIX --- */
+            width: 100%; /* Vul de volledige breedte van de container */
+            height: auto; 
+        }
+        
+        h1 { 
+            color: #ecf0f1; 
+            text-align: center; 
+            margin-bottom: 15px; 
+            font-size: 1.5rem; /* Iets kleiner font voor mobiel */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Ademhaling (3-0-3-0)</h1>
+        
+        <canvas id="breathingCanvas"></canvas>
+    </div>
+
+    <script src="breathing_ball.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('breathingCanvas');
+            
+            const cycleConfig = {
+                inhale: 3,
+                inhaleHold: 0,
+                exhale: 3,
+                exhaleHold: 0
+            };
+            
+            // Start de visualisatie
+            const visualizer = new BreathingBall(canvas, cycleConfig);
+        });
+    </script>
+</body>
+</html>

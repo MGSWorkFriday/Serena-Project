@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Serena - Polar & Breathing Monitor</title>
+  <link rel="manifest" href="/manifest.json" type="application/manifest+json">
+  <style>
+    /* --- CORE STYLES --- */
+    :root { 
+        --bg: #0b0f14; --panel: #121821; --ink: #e9eef5; 
+        --muted: #9db0c2; --accent: #4cc9f0; --ok: #6ee7a1; 
+        --warn: #fbbf24; --bad: #f87171; --blue-polar: #0091ff;
+        --btn-disabled: #2c3e50;
+    }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 12px 18px; }
+
+    /* --- HEADER --- */
+    header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    
+    .brand-name { 
+        font-size: 28px; font-weight: 400; letter-spacing: 0.5px; 
+        color: #4cc9f0; text-shadow: 0 0 12px rgba(76, 201, 240, 0.3);
+        flex-grow: 1; min-width: 120px; 
+    }
+    
+    .device-badge { font-size: 11px; background: #1f2835; padding: 4px 8px; border-radius: 4px; color: var(--muted); font-family: monospace; display: none; }
+
+    /* Buttons */
+    .btn {
+        background: transparent; border: 1px solid var(--muted); color: var(--muted);
+        border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 13px;
+        transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+        height: 32px; box-sizing: border-box;
+    }
+    .btn:active { transform: scale(0.96); }
+    .btn.active { border-color: var(--accent); color: var(--accent); background: rgba(76, 201, 240, 0.1); }
+    
+    .btn:disabled { border-color: var(--btn-disabled); color: var(--btn-disabled); cursor: not-allowed; background: transparent; }
+
+    .btn-start { border-color: var(--ok); color: var(--ok); }
+    .btn-start:hover:not(:disabled) { background: rgba(110, 231, 161, 0.1); }
+    .btn-start:disabled { border-color: #1f2835; color: #1f2835; }
+
+    .btn-stop { border-color: var(--bad); color: var(--bad); }
+    .btn-stop:hover:not(:disabled) { background: rgba(248, 113, 113, 0.1); }
+    .btn-stop:disabled { border-color: #1f2835; color: #1f2835; }
+
+    .btn-polar { border-color: var(--blue-polar); color: var(--blue-polar); }
+    .btn-polar.connected { background: var(--blue-polar); color: #fff; }
+
+    .btn-info {
+        background-color: var(--blue-polar); color: white; border: 1px solid var(--blue-polar);
+        font-weight: bold; font-family: serif; font-size: 16px; width: 32px; padding: 0; justify-content: center;
+    }
+    .btn-info:hover { background-color: #007acc; border-color: #007acc; }
+
+    .btn-select {
+        appearance: none; -webkit-appearance: none;
+        background-color: var(--panel); color: var(--ink); border-color: var(--accent);
+        padding-right: 24px;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234cc9f0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat; background-position: right 4px center; background-size: 14px;
+        max-width: 300px; min-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .btn-select:focus { outline: none; border-color: var(--ok); }
+
+    .conn-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 4px rgba(0,0,0,0.5); transition: background 0.3s; margin-left: auto; }
+    .conn-dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+
+    /* Cards */
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+    .card { background: var(--panel); border: 1px solid #1f2835; border-radius: 14px; padding: 12px; }
+    .k { font-size: 11px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .v { font-size: 24px; font-weight: 700; }
+    .u { font-size: 11px; color: var(--muted); font-weight: 500; margin-left: 2px; }
+
+    /* Canvas */
+    .visual-section { margin-bottom: 14px; }
+    .canvas-wrap { position: relative; background: #0f1520; border: 1px solid #1f2835; border-radius: 12px; overflow: hidden; width: 100%; }
+    
+    #ballContainer { height: 240px; display: flex; justify-content: center; align-items: center; background: #1a222e; transition: height 0.3s ease; }
+    #ballCanvas { width: 100%; height: 100%; display: block; }
+    
+    canvas.graph { display: block; width: 100%; height: 160px; }
+
+    .breath-guidance {
+        text-align: center; font-size: 1.1rem; font-weight: 600; color: var(--muted);
+        margin-bottom: 8px; min-height: 1.4rem; transition: color 0.3s;
+    }
+
+    @media (max-width: 600px) {
+        .wrap { padding: 10px; }
+        .brand-name { font-size: 24px; width: auto; margin-bottom: 8px; }
+        header { gap: 6px; }
+        .cards { gap: 8px; }
+        .v { font-size: 18px; }
+        .btn { padding: 4px 8px; font-size: 12px; }
+        .btn-select { font-size: 12px; max-width: 180px; }
+        .btn-info { width: 28px; font-size: 14px; }
+        canvas.graph { height: 140px; }
+        #ballContainer { height: 200px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wrap">
+    <header>
+      <div class="brand-name">Serena</div>
+      <div id="deviceBadge" class="device-badge">--</div>
+      
+      <select id="patternSelect" class="btn btn-select">
+          <option value="none" selected>⛔ Geen (Monitor)</option>
+      </select>
+
+      <button id="infoBtn" class="btn btn-info" title="Techniek Info">I</button>
+      <button id="startBtn" class="btn btn-start" disabled>Start</button>
+      <button id="stopBtn" class="btn btn-stop" disabled>Stop</button>
+
+      <button id="polarBtn" class="btn btn-polar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+        <span id="polarBtnText">H10</span>
+      </button>
+
+      <button id="audioToggle" class="btn" title="Audio feedback">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon></svg>
+        <span id="audioBtnText">Uit</span>
+      </button>
+
+      <div id="connDot" class="conn-dot" title="Server Status"></div>
+    </header>
+
+    <section class="cards">
+      <div class="card">
+        <div class="k">Hartslag</div>
+        <div class="v"><span id="hrVal">--</span><span class="u">bpm</span></div>
+      </div>
+      <div class="card">
+        <div class="k">Adem (Actueel)</div>
+        <div class="v"><span id="brCurrVal">--</span><span class="u">/min</span></div>
+      </div>
+      <div class="card">
+        <div class="k">Adem (Doel)</div>
+        <div class="v"><span id="targetVal">--</span><span class="u">/min</span></div>
+      </div>
+    </section>
+
+    <section class="visual-section">
+      <div id="breathGuidance" class="breath-guidance">Ademhalingscyclus</div>
+      <div class="canvas-wrap" id="ballContainer">
+        <canvas id="ballCanvas"></canvas>
+      </div>
+    </section>
+
+    <section class="visual-section">
+        <div class="k" style="margin-left: 4px;">ECG (Real-time)</div>
+        <div class="canvas-wrap">
+            <canvas id="ecgCanvas" class="graph"></canvas>
+        </div>
+    </section>
+
+    <section class="visual-section">
+        <div class="k" style="margin-left: 4px;">Ademhalingsanalyse</div>
+        <div class="canvas-wrap">
+            <canvas id="respCanvas" class="graph"></canvas>
+        </div>
+    </section>
+  </div>
+
+  <script>
+    /**
+     * INLINE BREATHING BALL CLASS
+     * Met Grid & Tijdsas
+     */
+    class BreathingBall {
+        constructor(canvas, config) {
+            this.canvas = canvas;
+            this.ctx = canvas.getContext('2d');
+            this.config = config;
+            this.running = true;
+            this.startTime = Date.now();
+            
+            this.resizeHandler = this.resize.bind(this);
+            window.addEventListener('resize', this.resizeHandler);
+            this.resize();
+
+            this.animate = this.animate.bind(this);
+            requestAnimationFrame(this.animate);
+        }
+
+        stop() {
+            this.running = false; 
+            window.removeEventListener('resize', this.resizeHandler); 
+        }
+
+        resize() {
+            const parent = this.canvas.parentElement;
+            if (parent) {
+                this.canvas.width = parent.clientWidth;
+                this.canvas.height = parent.clientHeight;
+            }
+        }
+
+        calculateY(absoluteTime) {
+            const { in: a, hold1: b, out: c, hold2: d } = this.config;
+            const total = a + b + c + d;
+            if (total <= 0) return 0.0;
+
+            let t = ((absoluteTime % total) + total) % total;
+
+            if (t < a && a > 0) return Math.sin(-Math.PI/2 + Math.PI*(t/a));
+            t -= a;
+            if (t < b && b > 0) return 1.0;
+            t -= b;
+            if (t < c && c > 0) return Math.sin(Math.PI/2 + Math.PI*(t/c));
+            return -1.0;
+        }
+
+        animate() {
+            if (!this.running) return;
+
+            const w = this.canvas.width;
+            const h = this.canvas.height;
+            const ctx = this.ctx;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Bepaal de 'window size' (hoeveel seconden zien we?)
+            // Minimaal 20s (dus +/- 10s). Als cyclus lang is (>10s), zoom uit.
+            const totalDur = this.config.in + this.config.hold1 + this.config.out + this.config.hold2;
+            const visibleDuration = Math.max(20, totalDur * 2.2); 
+            
+            const pxPerSec = w / visibleDuration;
+            const centerX = w / 2;
+
+            // 1. TEKEN GRID & LABELS (Vast op scherm)
+            ctx.fillStyle = '#1f2835'; // Achtergrond kleur voor grid (subtiel)
+            ctx.strokeStyle = '#2a3545'; // Grid lijnen
+            ctx.lineWidth = 1;
+            ctx.font = "11px monospace";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+
+            // We tekenen lijnen per 5 seconden, relatief aan 'nu' (center)
+            // Bereik van links (-visibleDuration/2) tot rechts (+visibleDuration/2)
+            const halfDur = visibleDuration / 2;
+            const stepSec = 5; 
+            
+            // Loop van bijv -15 tot +15 in stappen van 5
+            const startSec = Math.floor(-halfDur / stepSec) * stepSec;
+            const endSec = Math.ceil(halfDur / stepSec) * stepSec;
+
+            for(let t = startSec; t <= endSec; t += stepSec) {
+                const x = centerX + (t * pxPerSec);
+                
+                // Alleen tekenen als binnen canvas
+                if(x >= 0 && x <= w) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0); 
+                    ctx.lineTo(x, h);
+                    ctx.stroke();
+
+                    // Label (bijv "-5s", "0s", "+5s")
+                    ctx.fillStyle = (t === 0) ? '#4cc9f0' : '#5b6b7f'; // 0s is blauw
+                    const label = (t > 0 ? "+" : "") + t + "s";
+                    ctx.fillText(label, x, h - 2);
+                }
+            }
+
+            // Horizontale nullijn
+            ctx.beginPath(); 
+            ctx.strokeStyle = '#2a3545';
+            ctx.moveTo(0, h/2); 
+            ctx.lineTo(w, h/2); 
+            ctx.stroke();
+
+
+            // 2. TEKEN DE GOLF (Scrollend)
+            const nowSec = (Date.now() - this.startTime) / 1000;
+            
+            ctx.strokeStyle = '#4cc9f0'; 
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            // Teken van x=0 tot w
+            const stepPx = 2; 
+            for(let x = 0; x <= w; x += stepPx) {
+                // Welk tijdstip is dit relative aan 'now'?
+                const timeOffset = (x - centerX) / pxPerSec;
+                const t_at_x = nowSec + timeOffset;
+                
+                const y_norm = this.calculateY(t_at_x);
+                const y_px = h/2 - (y_norm * (h * 0.4)); // Amplitude 40% van hoogte
+                
+                if (x === 0) ctx.moveTo(x, y_px); 
+                else ctx.lineTo(x, y_px);
+            }
+            ctx.stroke();
+
+            // 3. TEKEN DE BAL (Vast in midden)
+            const y_ball_norm = this.calculateY(nowSec);
+            const y_ball_px = h/2 - (y_ball_norm * (h * 0.4));
+
+            ctx.fillStyle = '#4cc9f0';
+            ctx.shadowBlur = 15; ctx.shadowColor = '#4cc9f0';
+            ctx.beginPath(); 
+            ctx.arc(centerX, y_ball_px, 12, 0, Math.PI*2); 
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            requestAnimationFrame(this.animate);
+        }
+    }
+
+    /**
+     * SERENA.JS LOGICA
+     */
+    const CONFIG = {
+        ingestUrl: '/ingest',
+        streamUrl: '/stream?signals=hr_est,hr_derived,resp,ecg,guidance', 
+        techniquesUrl: '/techniques/public',
+        sampleRate: 130
+    };
+
+    let currentDeviceId = null; 
+    let sseConnection = null;   
+    let loadedTechniques = {}; 
+    let sessionActive = false; 
+    let currentBreathConfig = { in: 0, hold1: 0, out: 0, hold2: 0, label: "Geen", name: null };
+
+    const els = {
+        patternSelect: document.getElementById('patternSelect'),
+        infoBtn: document.getElementById('infoBtn'), 
+        startBtn: document.getElementById('startBtn'), 
+        stopBtn: document.getElementById('stopBtn'), 
+        polarBtn: document.getElementById('polarBtn'),
+        polarText: document.getElementById('polarBtnText'),
+        audioBtn: document.getElementById('audioToggle'),
+        audioText: document.getElementById('audioBtnText'),
+        connDot: document.getElementById('connDot'),
+        hrVal: document.getElementById('hrVal'),
+        brCurrVal: document.getElementById('brCurrVal'),
+        targetVal: document.getElementById('targetVal'),
+        guidance: document.getElementById('breathGuidance'),
+        ecgCanvas: document.getElementById('ecgCanvas'),
+        respCanvas: document.getElementById('respCanvas'),
+        ballCanvas: document.getElementById('ballCanvas'),
+        ballContainer: document.getElementById('ballContainer'),
+        deviceBadge: document.getElementById('deviceBadge') 
+    };
+
+    const state = {
+        polar: { device: null, connected: false, server: null, char: null },
+        upload: { queue: [], interval: null },
+        ecg: { buffer: [], maxPoints: 130 * 5 }, 
+        resp: { series: [], lastTs: Date.now() },
+        audio: { enabled: false, synth: window.speechSynthesis, voice: null, lastTime: 0, lastColor: '' },
+        ball: null 
+    };
+
+    // --- STATIC PREVIEW HELPER (Consistent met nieuwe grid logic) ---
+    function drawStaticPreview(canvas, cfg) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width; const h = canvas.height;
+        ctx.clearRect(0,0,w,h);
+
+        const totalDur = cfg.in + cfg.hold1 + cfg.out + cfg.hold2;
+        if (totalDur <= 0) return;
+
+        const dummy = new BreathingBall(canvas, cfg);
+        
+        // Settings kopiëren van animate
+        const visibleDuration = Math.max(20, totalDur * 2.2);
+        const pxPerSec = w / visibleDuration;
+        const centerX = w / 2;
+        const nowSec = 0; // Tijd 0
+
+        // 1. Grid (Statisch)
+        ctx.strokeStyle = '#2a3545'; ctx.lineWidth = 1;
+        ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+        const stepSec = 5; 
+        const halfDur = visibleDuration / 2;
+        const startSec = Math.floor(-halfDur / stepSec) * stepSec;
+        const endSec = Math.ceil(halfDur / stepSec) * stepSec;
+
+        for(let t = startSec; t <= endSec; t += stepSec) {
+            const x = centerX + (t * pxPerSec);
+            if(x >= 0 && x <= w) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+                ctx.fillStyle = (t === 0) ? '#4cc9f0' : '#5b6b7f';
+                ctx.fillText((t > 0 ? "+" : "") + t + "s", x, h - 2);
+            }
+        }
+        // Nullijn
+        ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+
+        // 2. Golf
+        ctx.strokeStyle = '#4cc9f0'; ctx.lineWidth = 3; ctx.beginPath();
+        const stepPx = 2;
+        for (let x = 0; x <= w; x += stepPx) {
+            const timeOffset = (x - centerX) / pxPerSec;
+            const t_at_x = nowSec + timeOffset;
+            const y_norm = dummy.calculateY(t_at_x);
+            const y_px = h/2 - (y_norm * (h * 0.4)); 
+            if (x===0) ctx.moveTo(x, y_px); else ctx.lineTo(x, y_px);
+        }
+        ctx.stroke();
+
+        // 3. Bal
+        const y_ball_norm = dummy.calculateY(nowSec);
+        const y_ball_px = h/2 - (y_ball_norm * (h * 0.4));
+        ctx.fillStyle = '#4cc9f0';
+        ctx.beginPath(); ctx.arc(centerX, y_ball_px, 12, 0, Math.PI*2); ctx.fill();
+
+        dummy.stop(); 
+    }
+
+    // --- TECHNIEKEN ---
+    async function loadTechniques() {
+        try {
+            const res = await fetch(CONFIG.techniquesUrl);
+            if(!res.ok) throw new Error("Fout bij laden");
+            loadedTechniques = await res.json();
+            
+            els.patternSelect.innerHTML = '<option value="none" selected>⛔ Geen (Monitor)</option>';
+            for (const [name, details] of Object.entries(loadedTechniques)) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                let bpmLabel = "";
+                if (details.protocol && details.protocol.length > 0) {
+                    const row = details.protocol[0]; 
+                    const dur = Number(row[0]) + Number(row[1]) + Number(row[2]) + Number(row[3]);
+                    if (dur > 0) bpmLabel = ` (${(60/dur).toFixed(1)} bpm)`;
+                }
+                opt.textContent = `${name}${bpmLabel}`;
+                els.patternSelect.appendChild(opt);
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    function updateControls() {
+        const noneSelected = (!currentBreathConfig.name || currentBreathConfig.name === 'none');
+        if (noneSelected) {
+            els.startBtn.disabled = true;
+            els.stopBtn.disabled = true;
+        } else {
+            if (sessionActive) {
+                els.startBtn.disabled = true;
+                els.stopBtn.disabled = false;
+                els.patternSelect.disabled = true; 
+            } else {
+                els.startBtn.disabled = false;
+                els.stopBtn.disabled = true;
+                els.patternSelect.disabled = false;
+            }
+        }
+    }
+
+    // --- SELECTIE ---
+    function selectTechnique(patternKey) {
+        stopSession(false); 
+
+        if (patternKey === 'none') {
+            currentBreathConfig = { in: 0, hold1: 0, out: 0, hold2: 0, label: "Geen", name: null };
+            els.ballContainer.style.display = 'none';
+            els.guidance.textContent = "Ademhalingscyclus";
+            broadcastReset();
+            updateControls();
+            return;
+        }
+
+        const tech = loadedTechniques[patternKey];
+        if (!tech || !tech.protocol) return;
+        const p = tech.protocol[0];
+        
+        currentBreathConfig = {
+            name: patternKey,
+            in: Number(p[0]), hold1: Number(p[1]), out: Number(p[2]), hold2: Number(p[3]),
+            label: patternKey
+        };
+
+        els.ballContainer.style.display = 'flex';
+        els.guidance.textContent = `Geselecteerd: ${patternKey}`;
+        
+        if(els.ballCanvas.parentElement) {
+            els.ballCanvas.width = els.ballCanvas.parentElement.clientWidth;
+            els.ballCanvas.height = els.ballCanvas.parentElement.clientHeight;
+        }
+        drawStaticPreview(els.ballCanvas, currentBreathConfig);
+        updateControls();
+    }
+
+    els.patternSelect.addEventListener('change', (e) => selectTechnique(e.target.value));
+
+    // --- START / STOP ---
+    els.startBtn.addEventListener('click', startSession);
+    els.stopBtn.addEventListener('click', () => stopSession(true));
+
+    function startSession() {
+        if (!currentBreathConfig.name) return;
+        
+        sessionActive = true;
+        els.guidance.textContent = `Start: ${currentBreathConfig.name}`;
+        
+        if (state.ball) { state.ball.stop(); state.ball = null; }
+        
+        state.ball = new BreathingBall(els.ballCanvas, {
+            in: currentBreathConfig.in,
+            hold1: currentBreathConfig.hold1,
+            out: currentBreathConfig.out,
+            hold2: currentBreathConfig.hold2
+        });
+
+        broadcastBreathTarget();
+        updateControls();
+    }
+
+    function stopSession(sendReset = true) {
+        sessionActive = false;
+        
+        if (state.ball) {
+            state.ball.stop();
+            state.ball = null;
+        }
+        
+        if (currentBreathConfig.name && currentBreathConfig.name !== 'none') {
+            requestAnimationFrame(() => drawStaticPreview(els.ballCanvas, currentBreathConfig));
+            els.guidance.textContent = `Gestopt: ${currentBreathConfig.name}`;
+        } else {
+            els.guidance.textContent = "Ademhalingscyclus";
+        }
+
+        if (sendReset) broadcastReset();
+        updateControls();
+    }
+
+    async function broadcastBreathTarget() {
+        if (!sessionActive) return; 
+        const cfg = currentBreathConfig;
+        const totalSec = cfg.in + cfg.hold1 + cfg.out + cfg.hold2;
+        const targetRR = totalSec > 0 ? (60 / totalSec) : 0;
+        
+        const payload = {
+            device_id: currentDeviceId || "UNKNOWN",
+            signal: "BreathTarget",
+            ts: Date.now(),
+            TargetRR: parseFloat(targetRR.toFixed(1)),
+            technique: cfg.name, 
+            breath_cycle: { in: cfg.in, hold1: cfg.hold1, out: cfg.out, hold2: cfg.hold2 }
+        };
+
+        try {
+            await fetch(CONFIG.ingestUrl, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            els.targetVal.textContent = targetRR.toFixed(1);
+        } catch (e) { console.error(e); }
+    }
+
+    async function broadcastReset() {
+        const payload = {
+            device_id: currentDeviceId || "UNKNOWN",
+            signal: "BreathTarget",
+            ts: Date.now(),
+            TargetRR: 0,
+            technique: null
+        };
+        try {
+            await fetch(CONFIG.ingestUrl, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            els.targetVal.textContent = "--";
+        } catch (e) {}
+    }
+
+    // --- POLAR (REST HETZELFDE) ---
+    const PMD_SERVICE = "fb005c80-02e7-f387-1cad-8acd2d8df0c8";
+    const PMD_CONTROL = "fb005c81-02e7-f387-1cad-8acd2d8df0c8";
+    const PMD_DATA    = "fb005c82-02e7-f387-1cad-8acd2d8df0c8";
+    const START_ECG_CMD = new Uint8Array([0x02, 0x00, 0x00, 0x01, 0x82, 0x00, 0x01, 0x01, 0x0E, 0x00]);
+    const STOP_STREAM_CMD = new Uint8Array([0x03, 0x00]);
+
+    function parseEcgFrame(dataView) {
+        if (dataView.getUint8(0) !== 0x00) return [];
+        const samples = [];
+        const len = dataView.byteLength;
+        for (let i = 10; i < len - 2; i += 3) {
+            const b0 = dataView.getUint8(i);
+            const b1 = dataView.getUint8(i+1);
+            const b2 = dataView.getUint8(i+2);
+            let sample = b0 | (b1 << 8) | (b2 << 16);
+            if (sample & 0x800000) sample |= 0xFF000000;
+            samples.push(sample);
+        }
+        return samples;
+    }
+
+    async function connectPolar() {
+        if (state.polar.connected) { disconnectPolar(); return; }
+        try {
+            els.polarText.textContent = "...";
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ namePrefix: 'Polar H10' }, { namePrefix: 'Polar H' }],
+                optionalServices: [PMD_SERVICE]
+            });
+            state.polar.device = device;
+            let rawName = device.name || "POLAR_WEB";
+            currentDeviceId = rawName.replace(/Polar/gi, "").replace(/H10/gi, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+            if (currentDeviceId.length === 0) currentDeviceId = "UNKNOWN";
+            updateDeviceBadge();
+            startSSE(); 
+
+            device.addEventListener('gattserverdisconnected', onPolarDisconnected);
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService(PMD_SERVICE);
+            const controlChar = await service.getCharacteristic(PMD_CONTROL);
+            state.polar.char = controlChar;
+            const dataChar = await service.getCharacteristic(PMD_DATA);
+            await dataChar.startNotifications();
+            dataChar.addEventListener('characteristicvaluechanged', handlePolarData);
+            await controlChar.writeValue(START_ECG_CMD);
+            state.polar.connected = true;
+            updatePolarUI(true, device.name);
+            startUploadLoop();
+        } catch (err) {
+            console.error(err);
+            els.polarText.textContent = "Err";
+            setTimeout(() => els.polarText.textContent = "H10", 2000);
+        }
+    }
+
+    function disconnectPolar() {
+        if (state.polar.device && state.polar.device.gatt.connected) {
+            if(state.polar.char) state.polar.char.writeValue(STOP_STREAM_CMD).catch(e=>{});
+            state.polar.device.gatt.disconnect();
+        }
+        onPolarDisconnected();
+    }
+
+    function onPolarDisconnected() {
+        state.polar.connected = false;
+        state.polar.device = null;
+        updatePolarUI(false);
+        if (state.upload.interval) clearInterval(state.upload.interval);
+    }
+
+    function updatePolarUI(connected, name = "") {
+        if (connected) { els.polarBtn.classList.add('connected'); els.polarText.textContent = "Aan"; } 
+        else { els.polarBtn.classList.remove('connected'); els.polarText.textContent = "H10"; }
+    }
+
+    function updateDeviceBadge() {
+        if (currentDeviceId) { els.deviceBadge.textContent = currentDeviceId; els.deviceBadge.style.display = "inline-block"; }
+    }
+
+    function handlePolarData(event) {
+        const samples = parseEcgFrame(event.target.value);
+        if(!samples.length) return;
+        const now = Date.now();
+        state.upload.queue.push({ device_id: currentDeviceId || "UNKNOWN", signal: "ecg", ts: now, samples: samples });
+        pushToEcgBuffer(samples);
+    }
+
+    function pushToEcgBuffer(samples) {
+        state.ecg.buffer.push(...samples);
+        if (state.ecg.buffer.length > state.ecg.maxPoints) {
+            state.ecg.buffer = state.ecg.buffer.slice(-state.ecg.maxPoints);
+        }
+    }
+
+    function startUploadLoop() {
+        if (state.upload.interval) clearInterval(state.upload.interval);
+        state.upload.interval = setInterval(async () => {
+            if (state.upload.queue.length === 0) return;
+            const batch = state.upload.queue.splice(0, 150);
+            try { await fetch(CONFIG.ingestUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(batch) }); } catch (e) {}
+        }, 500);
+    }
+
+    els.polarBtn.addEventListener('click', connectPolar);
+
+    // --- VISUALS ---
+    function resizeCanvas(canvas) {
+        const parent = canvas.parentElement;
+        if(parent) { canvas.width = parent.clientWidth; canvas.height = parent.clientHeight; }
+    }
+
+    function drawLocalECG() {
+        const ctx = els.ecgCanvas.getContext('2d');
+        const w = els.ecgCanvas.width; const h = els.ecgCanvas.height;
+        const data = state.ecg.buffer;
+        ctx.clearRect(0, 0, w, h); ctx.strokeStyle = '#4cc9f0'; ctx.lineWidth = 1.5; ctx.beginPath();
+        if (data.length > 1) {
+            let min = Infinity, max = -Infinity;
+            for(let v of data) { if(v < min) min = v; if(v > max) max = v; }
+            if (max === min) { max++; min--; }
+            const range = max - min; const step = w / data.length;
+            for (let i = 0; i < data.length; i++) {
+                const x = i * step; const y = h - ((data[i] - min) / range) * (h * 0.8) - (h * 0.1); 
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+        }
+        ctx.stroke(); requestAnimationFrame(drawLocalECG);
+    }
+
+    function drawRespGraph() {
+        const ctx = els.respCanvas.getContext('2d');
+        const w = els.respCanvas.width; const h = els.respCanvas.height;
+        ctx.clearRect(0, 0, w, h); ctx.strokeStyle = '#1f2835'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+        const now = Date.now(); const windowMs = 30000;
+        const relevant = state.resp.series.filter(p => (now - p.ts) < windowMs);
+        if(relevant.length < 2) return;
+        ctx.strokeStyle = '#f87171'; ctx.lineWidth = 2; ctx.beginPath();
+        for(let i=0; i < relevant.length; i++) {
+            const p = relevant[i]; const age = now - p.ts;
+            const x = w - (age / windowMs) * w; const y = h - (Math.min(30, Math.max(0, p.v)) / 30) * h;
+            if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+    }
+
+    function initVisuals() {
+        resizeCanvas(els.ecgCanvas); resizeCanvas(els.respCanvas);
+        drawLocalECG(); setInterval(drawRespGraph, 100); 
+    }
+    window.addEventListener('resize', () => {
+        resizeCanvas(els.ecgCanvas); resizeCanvas(els.respCanvas); 
+        // Resize Bal alleen als hij loopt
+        if(state.ball) state.ball.resize();
+        // Anders static redraw
+        else if(currentBreathConfig.name) drawStaticPreview(els.ballCanvas, currentBreathConfig);
+    });
+
+    // --- AUDIO & SSE ---
+    function initAudio() {
+        const load = () => {
+            const voices = window.speechSynthesis.getVoices();
+            state.audio.voice = voices.find(v => v.lang.includes('nl') && (v.name.includes('Google') || v.name.includes('Fenna'))) || voices.find(v => v.lang.includes('nl'));
+        };
+        window.speechSynthesis.onvoiceschanged = load; load();
+        els.audioBtn.addEventListener('click', () => {
+            state.audio.enabled = !state.audio.enabled;
+            if (state.audio.enabled) { els.audioBtn.classList.add('active'); els.audioText.textContent = "Aan"; speak("Audio gestart"); } 
+            else { els.audioBtn.classList.remove('active'); els.audioText.textContent = "Uit"; window.speechSynthesis.cancel(); }
+        });
+    }
+
+    function speak(text) {
+        if (!state.audio.enabled || !text) return;
+        const now = Date.now();
+        if (window.speechSynthesis.speaking || (now - state.audio.lastTime < 3000)) return;
+        const u = new SpeechSynthesisUtterance(text);
+        if(state.audio.voice) u.voice = state.audio.voice;
+        u.lang = 'nl-NL'; u.rate = 0.95;
+        state.audio.lastTime = now; window.speechSynthesis.speak(u);
+    }
+
+    function startSSE() {
+        if (sseConnection) sseConnection.close();
+        let url = CONFIG.streamUrl;
+        if (currentDeviceId) url += `&device=${encodeURIComponent(currentDeviceId)}`;
+        const es = new EventSource(url); sseConnection = es;
+        es.onopen = () => els.connDot.classList.add('ok');
+        es.onerror = () => els.connDot.classList.remove('ok');
+        es.onmessage = ev => {
+            if(!ev.data) return;
+            let obj; try { obj = JSON.parse(ev.data); } catch(e) { return; }
+            if ((obj.signal === 'hr_est' || obj.signal === 'hr_derived') && obj.bpm) els.hrVal.textContent = Math.round(obj.bpm);
+            if (obj.signal === 'ecg' && !state.polar.connected) {
+                let s = obj.samples || obj.ecg || obj.data || obj.v;
+                if (Array.isArray(s)) pushToEcgBuffer(s.map(Number));
+            }
+            if (obj.signal === 'resp' && obj.br_bpm_td) {
+                const val = obj.br_bpm_td; els.brCurrVal.textContent = val.toFixed(1);
+                state.resp.series.push({ ts: Date.now(), v: val });
+                if(state.resp.series.length > 600) state.resp.series.shift();
+            }
+            if (obj.signal === 'guidance') {
+                els.guidance.textContent = obj.text;
+                if(obj.color) {
+                    els.guidance.style.color = `var(--${obj.color})`; 
+                    const isGood = c => ['ok', 'accent'].includes(c) || c.includes('green');
+                    if (isGood(obj.color) && !isGood(state.audio.lastColor)) window.speechSynthesis.cancel();
+                    state.audio.lastColor = obj.color;
+                }
+                if(obj.target) els.targetVal.textContent = obj.target.toFixed(1);
+                if(obj.audio_text && sessionActive) speak(obj.audio_text);
+            }
+        };
+    }
+
+    els.infoBtn.addEventListener('click', () => {
+        const selected = els.patternSelect.value;
+        if (!selected || selected === 'none') { alert("Selecteer eerst een techniek om details te zien."); return; }
+        const encodedName = encodeURIComponent(selected);
+        const encodedDevId = encodeURIComponent(currentDeviceId || "");
+        window.location.href = `technique_info.html?name=${encodedName}&device=${encodedDevId}`;
+    });
+
+    window.addEventListener('load', async () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const devId = urlParams.get('device');
+        const techParam = urlParams.get('technique'); 
+
+        if (devId) { currentDeviceId = devId; updateDeviceBadge(); }
+
+        await loadTechniques(); 
+        initVisuals(); initAudio(); startSSE(); 
+        setInterval(broadcastBreathTarget, 10000); 
+
+        // Als er een techniek in de URL stond, selecteer en toon preview (maar start niet)
+        if (techParam && els.patternSelect.querySelector(`option[value="${techParam}"]`)) {
+            els.patternSelect.value = techParam;
+            selectTechnique(techParam); 
+        } else {
+            updateControls();
+        }
+    });
+
+  </script>
+</body>
+</html>

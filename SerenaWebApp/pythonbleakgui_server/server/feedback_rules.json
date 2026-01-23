@@ -1,0 +1,95 @@
+{
+  "blue": {
+    "messages": [
+      {
+        "weight": 10,
+        "text": "We gaan de volgende ademhaling samen doen...",
+        "audio_text": "We gaan de volgende ademhaling samen doen"
+      },
+      {
+        "weight": 3,
+        "text": "Bereid je voor op het ritme...",
+        "audio_text": "Bereid je voor op het ritme"
+      },
+      {
+        "weight": 2,
+        "text": "Volg de blauwe bal rustig...",
+        "audio_text": "Volg de blauwe bal rustig"
+      }
+    ],
+    "threshold_sec": 30.0
+  },
+  "green": {
+    "messages": [
+      {
+        "weight": 4,
+        "text": "Perfect ritme!",
+        "audio_text": "Perfect ritme"
+      },
+      {
+        "weight": 3,
+        "text": "Heel ontspannen, hou dit vast.",
+        "audio_text": "Heel ontspannen, hou dit vast"
+      },
+      {
+        "weight": 2,
+        "text": "Uitstekend.",
+        "audio_text": "Uitstekend"
+      }
+    ],
+    "threshold_pct": 5.0
+  },
+  "orange": {
+    "messages": [
+      {
+        "weight": 5,
+        "text": "Probeer het ritme weer op te pakken.",
+        "audio_text": "Probeer het ritme weer op te pakken"
+      },
+      {
+        "weight": 5,
+        "text": "Kleine afwijking, focus op de bal.",
+        "audio_text": "Kleine afwijking, focus op de bal"
+      },
+      {
+        "weight": 3,
+        "text": "Blijf rustig ademen.",
+        "audio_text": "Blijf rustig ademen"
+      }
+    ],
+    "threshold_pct": 15.0
+  },
+  "red_fast": {
+    "messages": [
+      {
+        "weight": 10,
+        "text": "Je ademt niet correct.",
+        "audio_text": "Je ademhaling is niet onder controlle. probeer dit weer op te pakken."
+      },
+      {
+        "weight": 5,
+        "text": "Let op je ademhaling.",
+        "audio_text": "Let op je ademhaling. pak het ritme weer op."
+      }
+    ]
+  },
+  "red_slow": {
+    "messages": [
+      {
+        "weight": 10,
+        "text": "Je ademt niet correct.",
+        "audio_text": "Je ademhaling is niet onder controlle. probeer dit weer op te pakken."
+      },
+      {
+        "weight": 5,
+        "text": "Probeer het tempo van de bal te volgen.",
+        "audio_text": "Probeer het tempo van de bal te volgen"
+      }
+    ]
+  },
+  "settings": {
+    "stability_duration": 3.0,
+    "repeat_interval": 7.0,
+    "visual_interval": 7.0
+  }
+}

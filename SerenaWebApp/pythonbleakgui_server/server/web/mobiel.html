@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polar ECG Monitor</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    // Error handler voor mobiel debuggen
+    window.onerror = function(msg, url, line) {
+      document.getElementById('root').innerHTML =
+        '<div style="color:white;background:red;padding:20px;font-family:monospace">' +
+        '<h2>Error:</h2><pre>' + msg + '\nLine: ' + line + '</pre></div>';
+      return true;
+    };
+  </script>
+
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // --- Icons ---
+    const Activity = () => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+      </svg>
+    );
+
+    const Heart = (props) => (
+      <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+      </svg>
+    );
+
+    const Settings = (props) => (
+      <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M12 1v6m0 6v6m5.66-13.66l-4.24 4.24M10.58 13.42l-4.24 4.24M23 12h-6m-6 0H5m13.66 5.66l-4.24-4.24M10.58 10.58l-4.24-4.24"></path>
+      </svg>
+    );
+
+    const Bluetooth = (props) => (
+      <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+      </svg>
+    );
+
+    const UploadCloud = (props) => (
+      <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="16 16 12 12 8 16"></polyline>
+        <line x1="12" y1="12" x2="12" y2="21"></line>
+        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path>
+      </svg>
+    );
+
+    // --- Polar Constants ---
+    /*
+	const PMD_SERVICE = "fb005c80-02e7-f387-1cad-8acd2d8df0c8";
+    const PMD_CONTROL = "fb005c80-02e7-f387-1cad-8acd2d8df0c8";*/
+	
+    const PMD_DATA = "fb005c82-02e7-f387-1cad-8acd2d8df0c8";
+
+	const PMD_SERVICE = "fb005c80-02e7-f387-1cad-8acd2d8df0c8"; // PMD Service
+	const PMD_CONTROL_CHAR = "fb005c81-02e7-f387-1cad-8acd2d8df0c8"; // PMD Control Point Characteristic
+	const PMD_DATA_CHAR = "fb005c82-02e7-f387-1cad-8acd2d8df0c8"; // PMD ECG Data Characteristic (gebruik je al correct)
+    // Command: Start stream, ECG, 130Hz, 14-bit (Data comes as 24-bit/3-byte packets)
+    const START_ECG_CMD = new Uint8Array([0x02, 0x00, 0x00, 0x01, 0x82, 0x00, 0x01, 0x01, 0x0E, 0x00]);
+    const STOP_STREAM_CMD = new Uint8Array([0x03, 0x00]);
+    const SAMPLE_RATE = 130;
+
+    /**
+     * GEFIXT (V2): Parse 24-bit ECG data (3 bytes per sample)
+     * In deze modus stuurt de H10 elke sample als 3 bytes (Little Endian).
+     */
+    const parseEcgFrame = (dataView) => {
+      // Byte 0 moet 0x00 zijn (ECG type)
+      if (dataView.getUint8(0) !== 0x00) return [];
+
+      const samples = [];
+      const offset = 10;
+      const len = dataView.byteLength;
+
+      // Stapgrootte is 3 bytes (24-bit)
+      for (let i = offset; i < len - 2; i += 3) {
+          const b0 = dataView.getUint8(i);
+          const b1 = dataView.getUint8(i+1);
+          const b2 = dataView.getUint8(i+2);
+
+          // Combineer 3 bytes tot één getal
+          let sample = b0 | (b1 << 8) | (b2 << 16);
+
+          // Sign extension voor 24-bit:
+          // Als de 24ste bit (0x800000) 1 is, is het negatief.
+          // Vul de resterende 8 bits met 1's (OR met 0xFF000000)
+          if (sample & 0x800000) {
+              sample |= 0xFF000000;
+          }
+
+          samples.push(sample);
+      }
+      return samples;
+    };
+
+    function PolarWebMonitor() {
+      // State
+      const [device, setDevice] = useState(null);
+      const [isConnected, setIsConnected] = useState(false);
+	  const [serverUrl, setServerUrl] = useState(`${window.location.origin}/ingest`);
+
+
+
+      const [isUploading, setIsUploading] = useState(true);
+      const [logs, setLogs] = useState([]);
+      const [showSettings, setShowSettings] = useState(false);
+      const [breathPhase, setBreathPhase] = useState("uit");
+      const [breathScale, setBreathScale] = useState(1);
+
+      // Refs
+      const canvasRef = useRef(null);
+      const dataQueueRef = useRef([]);
+      const plotBufferRef = useRef([]);
+      const characteristicRef = useRef(null);
+      const uploadIntervalRef = useRef(null);
+      const frameIdRef = useRef(null);
+
+      const addLog = (msg, type = 'info') => {
+        const ts = new Date().toLocaleTimeString();
+        setLogs(prev => [`[${ts}] ${msg}`, ...prev].slice(0, 50));
+      };
+
+      const connectToPolar = async () => {
+        try {
+          addLog("Zoeken naar Polar H10...", 'info');
+
+          // Filter ruim instellen voor betere detectie
+          const device = await navigator.bluetooth.requestDevice({
+            filters: [
+              { namePrefix: 'Polar H10' },
+              { namePrefix: 'Polar H' }
+            ],
+            optionalServices: [PMD_SERVICE, PMD_DATA]
+          });
+
+          setDevice(device);
+          addLog(`Verbonden met: ${device.name}`);
+
+          device.addEventListener('gattserverdisconnected', onDisconnected);
+
+          const server = await device.gatt.connect();
+          const service = await server.getPrimaryService(PMD_SERVICE);
+
+          // Gebruik de service UUID die in stap 2a is gecorrigeerd
+          const controlChar = await service.getCharacteristic(PMD_CONTROL_CHAR);
+          const dataChar = await service.getCharacteristic(PMD_DATA_CHAR);
+          characteristicRef.current = controlChar;
+
+          await dataChar.startNotifications();
+          dataChar.addEventListener('characteristicvaluechanged', handleEcgData);
+          addLog("Notificaties gestart");
+
+          // Start commando
+          if (controlChar.properties.writeWithoutResponse) {
+            await controlChar.writeValueWithoutResponse(START_ECG_CMD);
+          } else {
+            await controlChar.writeValue(START_ECG_CMD);
+          }
+          addLog("Stream gestart (130Hz, 24-bit/3-byte)");
+
+          setIsConnected(true);
+          startUploadLoop();
+
+        } catch (error) {
+          addLog(error.message || "Connectie fout", 'error');
+          console.error(error);
+        }
+      };
+
+      const disconnect = async () => {
+        if (device && device.gatt.connected) {
+          try {
+            if (characteristicRef.current) {
+              await characteristicRef.current.writeValue(STOP_STREAM_CMD);
+            }
+            device.gatt.disconnect();
+          } catch (e) {
+            console.warn("Disconnect failed", e);
+          }
+        }
+        onDisconnected();
+      };
+
+      const onDisconnected = () => {
+        setIsConnected(false);
+        setDevice(null);
+        addLog("Losgekoppeld", 'warn');
+        if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
+      };
+
+      const handleEcgData = (event) => {
+        const value = event.target.value; // DataView
+        const samples = parseEcgFrame(value);
+        const timestamp = Date.now();
+
+        // Buffer voor grafiek (laatste 5 sec)
+        const maxPlotSamples = SAMPLE_RATE * 5;
+        samples.forEach(s => {
+          plotBufferRef.current.push(s);
+        });
+        if (plotBufferRef.current.length > maxPlotSamples) {
+          plotBufferRef.current = plotBufferRef.current.slice(-maxPlotSamples);
+        }
+
+        // Buffer voor upload
+        if (isUploading) {
+          dataQueueRef.current.push({
+            ts: timestamp,
+            signal: "ecg",
+            samples: samples
+          });
+        }
+      };
+
+      const startUploadLoop = () => {
+        if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
+
+        uploadIntervalRef.current = setInterval(async () => {
+          if (dataQueueRef.current.length === 0) return;
+
+          // Pak max 200 items (batches)
+          const batch = dataQueueRef.current.splice(0, 200);
+
+          try {
+            await fetch(serverUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(batch)
+            });
+          } catch (err) {
+            // Stil falen om log spam te voorkomen
+            console.error("Upload fail", err);
+          }
+        }, 500); // 2x per seconde uploaden
+      };
+
+      // --- Grafiek Tekenen (Canvas) ---
+      const drawEcg = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        const data = plotBufferRef.current;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = '#ef4444'; // Tailwind Red-500
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        if (data.length > 0) {
+          // Auto-scaling
+          let min = Math.min(...data);
+          let max = Math.max(...data);
+          // Voorkom delen door nul bij vlakke lijn
+          if (max === min) { max += 100; min -= 100; }
+
+          const range = max - min;
+          // Marges 10%
+          const plotMin = min - range * 0.1;
+          const plotMax = max + range * 0.1;
+          const plotRange = plotMax - plotMin;
+
+          const step = width / data.length;
+
+          // Eerste punt
+          const startY = height - ((data[0] - plotMin) / plotRange) * height;
+          ctx.moveTo(0, startY);
+
+          for (let i = 1; i < data.length; i++) {
+            const x = i * step;
+            const y = height - ((data[i] - plotMin) / plotRange) * height;
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.stroke();
+
+        frameIdRef.current = requestAnimationFrame(drawEcg);
+      }, []);
+
+      useEffect(() => {
+        frameIdRef.current = requestAnimationFrame(drawEcg);
+        return () => cancelAnimationFrame(frameIdRef.current);
+      }, [drawEcg]);
+
+      // --- Ademhaling Animatie Loop ---
+      useEffect(() => {
+        const cycleTime = 10000; // 10 seconden cyclus
+        const animateBreath = () => {
+          const now = Date.now();
+          const progress = (now % cycleTime) / cycleTime;
+
+          if (progress < 0.4) { // 4 sec in
+            setBreathPhase("In");
+            setBreathScale(1 + (progress / 0.4) * 0.5);
+          } else if (progress < 0.6) { // 2 sec vast
+            setBreathPhase("Vast");
+            setBreathScale(1.5);
+          } else { // 4 sec uit
+            const exProgress = (progress - 0.6) / 0.4;
+            setBreathPhase("Uit");
+            setBreathScale(1.5 - (exProgress * 0.5));
+          }
+          requestAnimationFrame(animateBreath);
+        };
+        const id = requestAnimationFrame(animateBreath);
+        return () => cancelAnimationFrame(id);
+      }, []);
+
+      return (
+        <div className="min-h-screen bg-slate-900 text-white font-sans p-4 flex flex-col max-w-md mx-auto">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-4 bg-slate-800 p-3 rounded-xl shadow-lg">
+            <div className="flex items-center gap-2">
+              <Activity className="text-red-500 animate-pulse" />
+              <h1 className="font-bold text-lg">Polar ECG Link</h1>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowSettings(!showSettings)} className="p-2 bg-slate-700 rounded-full hover:bg-slate-600">
+                <Settings size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Connectie Paneel */}
+          {!isConnected ? (
+            <div className="bg-slate-800 rounded-xl p-6 flex flex-col items-center justify-center mb-4 shadow-lg border border-slate-700">
+              <Bluetooth className="w-16 h-16 text-blue-400 mb-4" />
+              <p className="text-slate-400 mb-6 text-center">Verbind je Polar H10 om ECG te streamen.</p>
+              <button
+                onClick={connectToPolar}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-all"
+              >
+                <Heart className="fill-current" size={20} />
+                Verbind Polar H10
+              </button>
+              <p className="text-xs text-slate-500 mt-4 text-center">Zorg dat Chrome (Android) of Bluefy (iOS) Bluetooth rechten heeft.</p>
+            </div>
+          ) : (
+            <div className="bg-green-900/30 border border-green-500/30 rounded-xl p-4 mb-4 flex justify-between items-center">
+              <div className="flex flex-col">
+                <span className="text-green-400 font-bold text-sm">VERBONDEN</span>
+                <span className="text-xs text-green-300/70">{device?.name}</span>
+              </div>
+              <button onClick={disconnect} className="bg-red-500/20 text-red-300 px-3 py-1 rounded text-xs border border-red-500/30">
+                Verbreek
+              </button>
+            </div>
+          )}
+
+          {/* ECG Grafiek */}
+          <div className="bg-black rounded-xl overflow-hidden border border-slate-700 shadow-inner mb-4 relative h-40">
+            <canvas
+              ref={canvasRef}
+              width={400}
+              height={160}
+              className="w-full h-full block"
+            />
+            <div className="absolute top-2 left-2 text-xs text-slate-500 bg-black/50 px-1">130Hz Raw (µV)</div>
+          </div>
+
+          {/* Ademhaling & Upload Stats */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center justify-center relative overflow-hidden">
+              <div
+                className="w-24 h-24 rounded-full bg-blue-500/20 absolute blur-xl transition-transform duration-100"
+                style={{ transform: `scale(${breathScale})` }}
+              />
+              <div className="relative z-10 text-center">
+                <span className="text-3xl font-bold text-blue-100">{breathPhase}</span>
+                <p className="text-xs text-blue-300 mt-1">Ademhaling</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col justify-between">
+              <div className="flex items-center gap-2 mb-2">
+                <UploadCloud size={16} className={isUploading ? "text-green-400" : "text-slate-500"} />
+                <span className="text-xs font-bold text-slate-300">Server Upload</span>
+              </div>
+              <div className="text-xs break-all text-slate-500 leading-tight">
+                {serverUrl.replace("https://", "").replace("http://", "").substring(0,20)}...
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <div className={`w-2 h-2 rounded-full ${dataQueueRef.current.length > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+                <span className="text-xs text-slate-400">Buffer: {dataQueueRef.current.length}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Instellingen */}
+          {showSettings && (
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-4">
+              <h3 className="font-bold text-sm mb-3 text-slate-300 flex items-center gap-2">
+                <Settings size={14}/> Instellingen
+              </h3>
+              <label className="block text-xs text-slate-400 mb-1">Server Ingest URL</label>
+              <input
+                type="text"
+                value={serverUrl}
+                onChange={(e) => setServerUrl(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white mb-3 focus:outline-none focus:border-blue-500"
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={isUploading}
+                  onChange={(e) => setIsUploading(e.target.checked)}
+                  className="rounded bg-slate-700 border-slate-600"
+                />
+                <span className="text-sm text-slate-300">Activeer Upload</span>
+              </div>
+            </div>
+          )}
+
+          {/* Logs */}
+          <div className="flex-1 bg-black/50 rounded-xl p-3 font-mono text-xs overflow-y-auto border border-slate-800 h-32">
+            <div className="text-slate-500 mb-1 border-b border-slate-800 pb-1">Systeem Logs</div>
+            {logs.map((log, i) => (
+              <div key={i} className="mb-1 truncate text-slate-300">{log}</div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(PolarWebMonitor));
+  </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# Alleen ECG-signalen uit één bestand
+python ecg_replay_ecg_only_file_loop.py C:\proj\vrijdag\TestBestanden\Test1.jsonl
+
+python ecg_replay_ecg_only_file_loop.py C:\proj\vrijdag\pythonbleakgui_server\logs\ingest_20251017.jsonl
+
+py C:\proj\vrijdag\pythonbleakgui\ecg_replay_ecg_only_file_loop_monots.py C:\proj\vrijdag\pythonbleakgui_server\logs\ingest_20251023_03_03_120.jsonl
+
+py C:\proj\nwevrijdag\pythonbleakgui\ecg_replay_ecg_only_file_loop_monots.py C:\proj\vrijdag\TestBestanden\Test2\ingest_20251029-2_0_2_0_30.jsonl
+
+# Alles toestaan (geen filter)
+python ecg_replay_ecg_only_file_loop.py C:\proj\vrijdag\TestBestanden\Test1.jsonl --signals *
+
+# Continu blijven herhalen
+python ecg_replay_ecg_only_file_loop.py C:\proj\vrijdag\TestBestanden\Test1.jsonl --loop
+
+
+# Alleen ECG, één bestand, één run
+python ecg_replay_ecg_only_file_loop_monots.py C:\pad\naar\bestand.jsonl --url http://localhost:8000/ingest
+
+
+python ecg_replay_ecg_only_file_loop_monots.py C:\proj\vrijdag\pythonbleakgui_server\logs\ingest_20251017.jsonl
+
+# Alles doorlaten (nog steeds monotone-ts guard voor ECG)
+python ecg_replay_ecg_only_file_loop_monots.py C:\pad\naar\bestand.jsonl --signals *
+
+# Continu herhalen
+python ecg_replay_ecg_only_file_loop_monots.py C:\pad\naar\bestand.jsonl --loop
+
+
+
+
+python D:\Github\vrijdag\pythonbleakgui\ecg_replay_ecg_only_file_loop_monots.py D:\Github\vrijdag\TestBestanden\input3\1serysDSS.jsonl
+python D:\Github\vrijdag\pythonbleakgui\ecg_replay_ecg_only_file_loop_monots.py D:\Github\vrijdag\TestBestanden\input3\1serysDSS-30.jsonl
+
+python D:\Github\vrijdag\pythonbleakgui\ecg_replay_ecg_only_file_loop_monots.py D:\Github\vrijdag\TestBestanden\input3\gwewfKfd.jsonl
+python D:\Github\vrijdag\pythonbleakgui\ecg_replay_ecg_only_file_loop_monots.py D:\Github\vrijdag\TestBestanden\input3\sgeCW65e.jsonl
+
+python D:\Github\vrijdag\pythonbleakgui\ecg_replay_ecg_only_file_loop_monots.py D:\Github\vrijdag\TestBestanden\input3\1serysDSS.jsonl
+
+
+python C:\proj\nwevrijdag\pythonbleakgui\ecg_replay_ecg_only_file_loop_monots.py   --file C:\proj\nwevrijdag\pythonbleakgui_server\logs\ingest_20251109.jsonl   --url http://localhost:8000/ingest
+
+C:\Users\pbrmm>python C:\proj\nwevrijdag\pythonbleakgui\ecg_replay_ecg_only_file_loop_monots.py --file C:\proj\nwevrijdag\pythonbleakgui_server\logs\ingest_20251109.jsonl --url http://localhost:8000/ingest --bulk --verbose --format json

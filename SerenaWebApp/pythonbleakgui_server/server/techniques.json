@@ -1,0 +1,170 @@
+{
+  "Cyclic Sighing (Stanford-stijl)": {
+    "description": "Evidence-based exact protocol\n\nIn: neus (2 fases) / Uit: mond\n\nVermindert angst, verlaagt ademfrequentie",
+    "param_version": "Default6",
+    "show_in_app": true,
+    "protocol": [
+      [
+        3,
+        0,
+        7,
+        0,
+        1000
+      ]
+    ]
+  },
+  "Coherent Breathing": {
+    "description": "Evidence-based exact protocol\n\nIn: neus / Uit: neus of mond\n\nHRV-coherentie, autonome balans",
+    "param_version": "Default6",
+    "show_in_app": true,
+    "protocol": [
+      [
+        4,
+        0,
+        6,
+        0,
+        1000
+      ]
+    ]
+  },
+  "Science of Breathing (S)": {
+    "description": "Sabine",
+    "param_version": "Default3",
+    "show_in_app": false,
+    "protocol": [
+      [
+        10,
+        0,
+        10,
+        0,
+        1000
+      ]
+    ]
+  },
+  "Alternate Nostril Breathing (Nadi Shodhana) (S)": {
+    "description": "Evidence-based exact protocol\t\n\nIn: ene neus / Uit: andere neus (afwisselend)\n\nHRV-verbetering, bloeddrukregulatie",
+    "param_version": "Default75",
+    "show_in_app": true,
+    "protocol": [
+      [
+        4,
+        0,
+        4,
+        0,
+        1000
+      ]
+    ]
+  },
+  "Extended Exhale (1:2) (S)": {
+    "description": "Evidence-based exact protocol\t\n\nIn: neus / Uit: neus of mond\n\nVagusactivatie, diepe ontspanning",
+    "param_version": "Default5",
+    "show_in_app": true,
+    "protocol": [
+      [
+        4,
+        0,
+        8,
+        0,
+        1000
+      ]
+    ]
+  },
+  "Retentie": {
+    "description": "2-0-2-0-20\n2-0-2-0-12\n30\n2-0-2-0-200",
+    "param_version": "Default6",
+    "show_in_app": false,
+    "protocol": [
+      [
+        2,
+        0,
+        2,
+        0,
+        20
+      ],
+      [
+        0,
+        0,
+        0,
+        30,
+        1
+      ],
+      [
+        2,
+        0,
+        2,
+        0,
+        12
+      ],
+      [
+        0,
+        0,
+        0,
+        30,
+        1
+      ],
+      [
+        2,
+        0,
+        2,
+        0,
+        200
+      ]
+    ]
+  },
+  "Rustige ontspanning (M)": {
+    "description": "Rustig ontspannen met natuurlijk ritme",
+    "param_version": "Default10",
+    "show_in_app": true,
+    "protocol": [
+      [
+        3,
+        0,
+        3,
+        0,
+        1000
+      ]
+    ]
+  },
+  "Versnelde inspanning (M)": {
+    "description": "Ademhaling tijdens of na inspanning",
+    "param_version": "Default15",
+    "show_in_app": true,
+    "protocol": [
+      [
+        2,
+        0,
+        2,
+        0,
+        1000
+      ]
+    ]
+  },
+  "Hyperventilatie (M)": {
+    "description": "Snel in en uitademen",
+    "param_version": "Default30",
+    "show_in_app": true,
+    "protocol": [
+      [
+        1,
+        0,
+        1,
+        0,
+        1000
+      ]
+    ]
+  },
+  "Sport Pacer": {
+    "description": "Dynamisch ritme voor sportactiviteiten",
+    "param_version": "DefaultSport",
+    "show_in_app": false,
+    "protocol": [
+      [
+        1,
+        0,
+        1,
+        0,
+        1000
+      ]
+    ]
+  }
+}

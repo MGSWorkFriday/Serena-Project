@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Serena Dashboard</title>
+  <style>
+    :root { --bg:#0b0f14; --panel:#121821; --ink:#e9eef5; --muted:#9db0c2; --accent:#4cc9f0; --ok:#6ee7a1; --warn:#fbbf24; --bad:#f87171; }
+    html,body{height:100%}
+    body{ margin:0; background:var(--bg); color:var(--ink); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial }
+    .wrap{max-width:1100px;margin:0 auto;padding:12px 18px}
+    
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; padding-left: 4px; }
+    .brand-name { font-size: 22px; font-weight: 300; letter-spacing: 0.5px; color: var(--ink); margin-right: auto; }
+    .device-id-badge { font-size: 11px; background: #1f2835; padding: 4px 8px; border-radius: 4px; color: var(--muted); font-family: monospace; }
+    
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); transition: background 0.3s ease; box-shadow: 0 0 4px rgba(0,0,0,0.5); }
+    .conn-dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+
+    /* Controls */
+    .controls { display: flex; gap: 8px; align-items: center; background: #1a222e; padding: 4px 8px; border-radius: 6px; border: 1px solid #2a3545; }
+    select { background: #0b0f14; color: var(--ink); border: 1px solid var(--muted); padding: 4px 8px; border-radius: 4px; max-width: 200px; }
+    .btn { background: transparent; border: 1px solid var(--muted); color: var(--muted); border-radius: 4px; padding: 4px 12px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .btn:hover { background: rgba(255,255,255,0.05); }
+    .btn.primary { border-color: var(--ok); color: var(--ok); }
+    .btn.primary:hover { background: rgba(110, 231, 161, 0.1); }
+    .btn.danger { border-color: var(--bad); color: var(--bad); }
+    .btn.danger:hover { background: rgba(248, 113, 113, 0.1); }
+    
+    .audio-btn { border-color: var(--accent); color: var(--accent); }
+    .audio-btn.active { background: rgba(76, 201, 240, 0.2); }
+
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+    .card { background: var(--panel); border: 1px solid #1f2835; border-radius: 14px; padding: 12px; overflow-wrap: break-word; }
+    .k { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .v { font-size: 24px; font-weight: 700; }
+    .u { font-size: 12px; color: var(--muted); margin-left: 6px; font-weight: 500; }
+    .small { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    @media (max-width: 700px) {
+      .wrap { padding: 10px 12px; }
+      header { gap: 8px; }
+      .brand-name { width: 100%; margin-bottom: 8px; order: -1; }
+      .controls { flex-grow: 1; order: 2; }
+      .cards { gap: 8px; }
+      .card { padding: 10px 6px; border-radius: 10px; }
+      .v { font-size: 18px; }
+    }
+
+    .canvas-card{ padding: 12px; } 
+    .canvas-wrap{ position:relative; background:#0f1520; border:1px solid #1f2835; border-radius:12px; overflow:hidden }
+    canvas{display:block;width:100%;height:220px}
+    
+    .breath-guidance { font-size: 1.3rem; font-weight: 600; text-align: center; margin-bottom: 12px; min-height: 1.8rem; color: var(--muted); transition: color 0.3s ease; padding: 0 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand-name">Serena Dashboard</div>
+      
+      <div class="controls">
+        <select id="techSelect">
+          <option value="">Laden...</option>
+        </select>
+        <button id="startBtn" class="btn primary">Start</button>
+        <button id="stopBtn" class="btn danger" style="display:none;">Stop</button>
+      </div>
+
+      <button id="audioToggle" class="btn audio-btn">Audio Uit</button>
+      <div id="deviceIdDisplay" class="device-id-badge" title="Actieve Device ID">--</div>
+      <div id="connDot" class="conn-dot" title="Status verbinding"></div>
+    </header>
+
+    <section class="cards">
+      <div class="card"><div class="k">Hartslag</div><div class="v"><span id="hrVal">--</span><span class="u">bpm</span></div></div>
+      <div class="card"><div class="k">Adem (actueel)</div><div class="v"><span id="brCurrVal">--</span><span class="u">/min</span></div><div class="small">TD (ca 20s)</div></div>
+      <div class="card"><div class="k">Adem (doel)</div><div class="v"><span id="targetVal">--</span><span class="u">/min</span></div><div class="small" style="color:var(--accent)">Patroon</div></div>
+    </section>
+
+    <section class="card canvas-card">
+      <div id="breathGuidance" class="breath-guidance">Wachten op data...</div>
+      <div class="canvas-wrap"><canvas id="respCanvas" width="1000" height="220"></canvas></div>
+    </section>
+
+    <section class="card canvas-card">
+      <div class="canvas-wrap"><canvas id="ecgCanvas" width="1000" height="220"></canvas></div>
+    </section>
+  </div>
+
+  <script>
+    // ---------- AUDIO ENGINE ----------
+    const audioState = { enabled: false, lastText: "", lastTime: 0, lastColor: "", synth: window.speechSynthesis, voice: null };
+
+    function loadVoices() {
+      let voices = audioState.synth.getVoices(); if (voices.length === 0) return;
+      const dutchVoices = voices.filter(v => v.lang.includes('nl'));
+      let femaleVoice = dutchVoices.find(v => v.name.includes("Google Nederlands")) || 
+                        dutchVoices.find(v => v.name.includes("Fenna")) || 
+                        dutchVoices.find(v => v.name.toLowerCase().includes("female"));
+      if (femaleVoice) audioState.voice = femaleVoice; 
+      else if (dutchVoices.length > 0) audioState.voice = dutchVoices[0];
+    }
+    if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+
+    const audioBtn = document.getElementById('audioToggle');
+    audioBtn.addEventListener('click', () => {
+      audioState.enabled = !audioState.enabled;
+      if(audioState.enabled){
+        if(!audioState.voice) loadVoices();
+        audioBtn.textContent = "Audio Aan"; audioBtn.classList.add('active');
+        speak("Audio dashboard geactiveerd.");
+      } else {
+        audioBtn.textContent = "Audio Uit"; audioBtn.classList.remove('active');
+        audioState.synth.cancel();
+      }
+    });
+
+    function speak(text) {
+      if(!audioState.enabled || !text) return;
+      const now = Date.now();
+      if (audioState.synth.speaking || (now - audioState.lastTime) < 3000) return; 
+      const u = new SpeechSynthesisUtterance(text);
+      if (audioState.voice) u.voice = audioState.voice;
+      u.lang = 'nl-NL'; u.rate = 0.95;
+      audioState.lastText = text; audioState.lastTime = now;
+      audioState.synth.speak(u);
+    }
+
+    // ---------- CLIENT-SIDE PACER (Techniek Sturing) ----------
+    const pacer = {
+        active: false,
+        timer: null,
+        startTime: 0,
+        protocol: [], // Flattened protocol: [{dur:4, type:'in'}, {dur:0, type:'hold'}, ...]
+        totalDuration: 0,
+        currentTechnique: "",
+        
+        start: function(name, protocolData) {
+            this.currentTechnique = name;
+            // Flatten protocol
+            this.protocol = [];
+            if(Array.isArray(protocolData)){
+                protocolData.forEach(row => {
+                    const [t_in, t_h1, t_out, t_h2, reps] = row;
+                    for(let i=0; i<reps; i++){
+                        this.protocol.push({d: t_in, ph: 'in', row: row});
+                        if(t_h1>0) this.protocol.push({d: t_h1, ph: 'hold1', row: row});
+                        this.protocol.push({d: t_out, ph: 'out', row: row});
+                        if(t_h2>0) this.protocol.push({d: t_h2, ph: 'hold2', row: row});
+                    }
+                });
+            }
+            if(this.protocol.length === 0) return;
+            
+            // Bereken cumulatieve tijden
+            let acc = 0;
+            this.protocol.forEach(step => {
+                step.start = acc;
+                acc += step.d;
+                step.end = acc;
+            });
+            this.totalDuration = acc;
+            
+            this.startTime = Date.now() / 1000;
+            this.active = true;
+            
+            // Start Loop
+            if(this.timer) clearInterval(this.timer);
+            this.timer = setInterval(() => this.tick(), 500); // 2Hz update naar server is genoeg
+            this.tick(); // Direct eerste keer
+            
+            $('#startBtn').style.display = 'none';
+            $('#stopBtn').style.display = 'inline-block';
+            $('#techSelect').disabled = true;
+        },
+        
+        stop: function() {
+            this.active = false;
+            if(this.timer) clearInterval(this.timer);
+            this.sendUpdate(0, null); // Reset server
+            $('#startBtn').style.display = 'inline-block';
+            $('#stopBtn').style.display = 'none';
+            $('#techSelect').disabled = false;
+        },
+        
+        tick: function() {
+            if(!this.active) return;
+            const now = Date.now() / 1000;
+            const elapsed = now - this.startTime;
+            
+            // Zoek huidige stap
+            // Als we voorbij totaal zijn, begin opnieuw (looping)
+            const t_loop = elapsed % this.totalDuration;
+            const step = this.protocol.find(s => t_loop >= s.start && t_loop < s.end);
+            
+            if(step) {
+                // Bereken TargetRR van de huidige rij
+                const [a,b,c,d] = step.row;
+                const dur = a+b+c+d;
+                const rr = dur > 0 ? (60/dur) : 0;
+                
+                const cycle = {in: a, hold1: b, out: c, hold2: d};
+                this.sendUpdate(rr, cycle);
+            }
+        },
+        
+        sendUpdate: function(rr, cycle) {
+            // ID ophalen
+            const urlParams = new URLSearchParams(window.location.search);
+            const devId = urlParams.get('device') || "WEB_CLIENT";
+            
+            const payload = {
+                device_id: devId,
+                signal: "BreathTarget",
+                ts: Date.now(),
+                TargetRR: rr,
+                technique: this.currentTechnique
+            };
+            if(cycle) payload.breath_cycle = cycle;
+            
+            fetch('/ingest', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            }).catch(console.error);
+        }
+    };
+
+    // ---------- UI Logic ----------
+    const $ = s => document.querySelector(s);
+    const techSelect = $('#techSelect');
+    let availableTechniques = {};
+
+    async function loadTechniques() {
+        try {
+            const r = await fetch('/techniques/public'); // NIEUW ENDPOINT
+            if(r.ok) {
+                availableTechniques = await r.json();
+                techSelect.innerHTML = '<option value="">-- Kies Techniek --</option>';
+                for(const [name, data] of Object.entries(availableTechniques)) {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = name;
+                    techSelect.appendChild(opt);
+                }
+            } else {
+                techSelect.innerHTML = '<option>Fout bij laden</option>';
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    $('#startBtn').addEventListener('click', () => {
+        const name = techSelect.value;
+        if(!name || !availableTechniques[name]) return;
+        pacer.start(name, availableTechniques[name].protocol);
+    });
+    
+    $('#stopBtn').addEventListener('click', () => {
+        pacer.stop();
+    });
+
+    // ---------- Helpers ----------
+    function setStatus(ok, txt){ const dot=$('#connDot'); if(dot) { dot.classList.toggle('ok', !!ok); dot.title = txt; } }
+    function resizeCanvas(c){
+      const r=c.getBoundingClientRect(), w=Math.max(300,Math.floor(r.width)), h=Math.max(150,Math.floor(r.height));
+      if(c.width!==w||c.height!==h){ c.width=w; c.height=h; return true;} return false;
+    }
+
+    // ---------- Draw Functions ----------
+    function drawSeries(canvas, arr, color='#4cc9f0'){
+      const ctx=canvas.getContext('2d'); resizeCanvas(canvas);
+      const W=canvas.width,H=canvas.height; ctx.clearRect(0,0,W,H);
+      ctx.save(); ctx.strokeStyle='#1f2835'; ctx.lineWidth=1;
+      for(let i=1;i<4;i++){ const y=i*H/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+      ctx.restore();
+      if(!arr || arr.length<2) return;
+      let maxAbs=1; for(const v of arr) if(Math.abs(v)>maxAbs) maxAbs=Math.abs(v);
+      const scale=(H*0.4)/maxAbs, mid=H/2;
+      ctx.save(); ctx.lineWidth=2; ctx.strokeStyle=color; ctx.beginPath();
+      for(let i=0;i<arr.length;i++){
+        const x=(i/(arr.length-1))*(W-8)+4, y=mid-arr[i]*scale;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      } ctx.stroke(); ctx.restore();
+    }
+
+    function drawMultiSeries(canvas, seriesList, nowMs){
+      const ctx=canvas.getContext('2d'); resizeCanvas(canvas);
+      const W=canvas.width,H=canvas.height, left=32, sec=30, yMax=35;
+      ctx.clearRect(0,0,W,H);
+      ctx.save(); ctx.strokeStyle='#1f2835'; ctx.lineWidth=1;
+      for(let i=0;i<=7;i++){ const y=(i/7)*H; ctx.beginPath(); ctx.moveTo(left,y); ctx.lineTo(W,y); ctx.stroke(); }
+      for(let i=0;i<=5;i++){ const x=left+(i/5)*(W-left); ctx.beginPath(); ctx.moveTo(x,H); ctx.lineTo(x,H-6); ctx.stroke(); }
+      ctx.restore();
+      ctx.fillStyle="#9db0c2"; ctx.font="11px system-ui";
+      for(let i=0;i<=7;i++) ctx.fillText(Math.round((1-i/7)*yMax).toString(), 2, (i/7)*H+4);
+      for(let i=0;i<=5;i++) ctx.fillText((-sec+(i/5)*sec).toFixed(0)+"s", left+(i/5)*(W-left)-12, H-2);
+
+      const mid=H/2, brScale = v => H - (Math.max(0,Math.min(yMax,v||0))/yMax)*H;
+      seriesList.forEach(s=>{
+        if (s.kind === 'wave') {
+          const br=s.br||0; if(br<=0) return;
+          const omega=2*Math.PI*(br/60), N=300, tOff=Date.now()/1000;
+          ctx.save(); ctx.lineWidth=1.5; ctx.strokeStyle=s.color; ctx.beginPath();
+          for(let i=0;i<N;i++){
+             const age=sec*i/(N-1), x=left+(1-age/sec)*(W-left), y=mid-Math.sin(omega*(tOff-age))*(H*0.35);
+             if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
+          } ctx.stroke(); ctx.restore();
+        } else if(s.kind === 'br'){
+          const pts=s.data; if(!pts||!pts.length) return;
+          ctx.save(); ctx.lineWidth=2; ctx.strokeStyle=s.color; ctx.beginPath();
+          let st=false;
+          for(const p of pts){
+             const age=(nowMs-p.ts)/1000; if(age<0||age>sec) continue;
+             const x=left+(1-age/sec)*(W-left), y=brScale(p.v);
+             if(!st){ctx.moveTo(x,y); st=true;} else ctx.lineTo(x,y);
+          } ctx.stroke(); ctx.restore();
+        }
+      });
+    }
+
+    // ---------- State ----------
+    const state = { hrBpm: null, lastTs: null, targetRR: null, guidance: { text: "Wachten...", color: "" }, resp:{ td:null }, ecg:{ v:[], fs:130, n:0, windowSec:10 }, brSeries:[] };
+    const respCanvas=$('#respCanvas'), ecgCanvas=$('#ecgCanvas');
+
+    function render(){
+      drawSeries(ecgCanvas, state.ecg.v, '#bde0fe');
+      const now = state.lastTs || Date.now();
+      const brWindow = state.brSeries.filter(p => (now - p.ts) <= 30000);
+      const curr = state.resp.td;
+      drawMultiSeries(respCanvas, [{ kind:'wave', br: curr || 0, color:'#4cc9f0' }, { kind:'br', data: brWindow, color:'#f87171' }], now);
+      
+      $('#targetVal').textContent = (state.targetRR!=null) ? state.targetRR.toFixed(1) : "--";
+      $('#brCurrVal').textContent = (curr!=null) ? curr.toFixed(1) : '--';
+      $('#hrVal').textContent = state.hrBpm!=null ? Math.round(state.hrBpm) : '--';
+      
+      const gEl = $('#breathGuidance');
+      gEl.textContent = state.guidance.text;
+      if (state.guidance.color) {
+          gEl.style.color = `var(--${state.guidance.color})`;
+          $('#targetVal').style.color = `var(--${state.guidance.color})`;
+      } else {
+          gEl.style.color = 'var(--muted)';
+          $('#targetVal').style.color = '';
+      }
+    }
+
+    async function primeRecent(devId){
+      try{
+        const url = `/recent?signal=resp&limit=1&device=${encodeURIComponent(devId)}`;
+        const r = await fetch(url, {cache:'no-store'});
+        if(r.ok){
+          const j = await r.json();
+          if(j.items && j.items.length){
+            const obj=j.items[j.items.length-1];
+            if(typeof obj.br_bpm_td==='number'){
+               state.resp.td = obj.br_bpm_td;
+               state.brSeries.push({ts: Date.now(), v: obj.br_bpm_td});
+            }
+            state.lastTs = obj.ts || Date.now();
+          }
+        }
+      }catch(e){} render();
+    }
+
+    function startSSE(){
+      const urlParams = new URLSearchParams(window.location.search);
+      const devId = urlParams.get('device') || "";
+      
+      const badge = $('#deviceIdDisplay');
+      badge.textContent = devId ? `ID: ${devId}` : "GEEN ID (Toont alles)";
+      if (!devId) badge.style.color = "var(--warn)";
+
+      const es = new EventSource(`/stream?signals=hr_est,hr_derived,resp,ecg,guidance&device=${encodeURIComponent(devId)}`);
+      es.onopen = ()=> setStatus(true,`Verbonden (${devId})`);
+      es.onerror = ()=> setStatus(false,'Verbroken');
+      es.onmessage = ev=>{
+        if(!ev.data) return;
+        let obj; try{ obj=JSON.parse(ev.data); }catch(_){ return; }
+        const sig = obj.signal;
+        const ts = obj.ts || state.lastTs || Date.now();
+        if(obj.ts) state.lastTs = obj.ts;
+
+        if (sig === 'guidance') {
+            state.guidance.text = obj.text; state.guidance.color = obj.color; 
+            if (typeof obj.target === 'number') state.targetRR = obj.target;
+            const isGood = c => ['ok', 'accent'].includes(c) || c.includes('green');
+            if (isGood(obj.color) && audioState.synth.speaking) {
+                 const lastBad = ['bad','warn','orange','red'].some(x=> audioState.lastColor.includes(x));
+                 if(lastBad) window.speechSynthesis.cancel();
+            }
+            audioState.lastColor = obj.color;
+            if (obj.audio_text) speak(obj.audio_text);
+            render(); return;
+        }
+        if(sig === 'hr_est' || sig === 'hr_derived'){ if(typeof obj.bpm === 'number') state.hrBpm = obj.bpm; render(); return; }
+        if(sig === 'resp'){
+          if(typeof obj.br_bpm_td === 'number'){
+            state.resp.td = obj.br_bpm_td;
+            state.brSeries.push({ts: ts, v: obj.br_bpm_td});
+            if(state.brSeries.length > 600) state.brSeries.shift();
+          }
+          render(); return;
+        }
+        if(sig === 'ecg'){
+          let samples = obj.samples || obj.ecg || obj.data || obj.values || obj.v;
+          if(!samples || !samples.length) return;
+          if(typeof obj.TargetRR === 'number') state.targetRR = obj.TargetRR;
+          const fs = Number(obj.fs || 130); state.ecg.fs = fs;
+          samples = (Array.isArray(samples)?samples:[samples]).map(x => Number(x)||0);
+          const maxN = Math.max(1, Math.round(fs * state.ecg.windowSec));
+          state.ecg.v.push(...samples);
+          if(state.ecg.v.length > maxN) state.ecg.v = state.ecg.v.slice(-maxN);
+          render(); return;
+        }
+      };
+      return es;
+    }
+
+    window.addEventListener('load', async ()=>{
+      loadTechniques(); // NIEUW: Laad de dropdown
+      render();
+      const did=new URLSearchParams(window.location.search).get('device')||"";
+      await primeRecent(did);
+      startSSE();
+    });
+    window.addEventListener('resize', render);
+  </script>
+</body>
+</html>
