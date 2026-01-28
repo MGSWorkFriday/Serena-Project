@@ -1,31 +1,77 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Theme configuration
+ * Colors, typography, spacing, and other design tokens
  */
 
-import { Platform } from 'react-native';
+import { Platform, Dimensions } from 'react-native';
+import { lightColors, darkColors, type ColorScheme } from './colors';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+const tintColorLight = '#3b82f6';
+const tintColorDark = '#60a5fa';
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    ...lightColors,
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: lightColors.textSecondary,
+    tabIconDefault: lightColors.textTertiary,
     tabIconSelected: tintColorLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    ...darkColors,
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: darkColors.textSecondary,
+    tabIconDefault: darkColors.textTertiary,
     tabIconSelected: tintColorDark,
   },
 };
+
+// Spacing system
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+} as const;
+
+// Border radius
+export const borderRadius = {
+  sm: 4,
+  md: 8,
+  lg: 12,
+  xl: 16,
+  full: 9999,
+} as const;
+
+// Screen dimensions
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Breakpoints
+export const breakpoints = {
+  phone: 0,
+  tablet: 768,
+  desktop: 1024,
+} as const;
+
+// Responsive utilities
+export const isTablet = screenWidth >= breakpoints.tablet;
+export const isPhone = screenWidth < breakpoints.tablet;
+
+// Responsive values
+export const responsive = {
+  padding: isTablet ? spacing.lg : spacing.md,
+  cardPadding: isTablet ? spacing.xl : spacing.md,
+  fontSize: {
+    xs: isTablet ? 12 : 10,
+    sm: isTablet ? 14 : 12,
+    md: isTablet ? 16 : 14,
+    lg: isTablet ? 18 : 16,
+    xl: isTablet ? 24 : 20,
+    xxl: isTablet ? 32 : 28,
+  },
+} as const;
 
 export const Fonts = Platform.select({
   ios: {

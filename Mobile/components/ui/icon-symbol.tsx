@@ -1,29 +1,47 @@
-// Fallback for using MaterialIcons on Android and web.
+// Fallback voor MaterialIcons op Android en web (SF Symbols op iOS).
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
+import type { SymbolWeight } from 'expo-symbols';
 import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
-type IconSymbolName = keyof typeof MAPPING;
+type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
-/**
- * Add your SF Symbols to Material Icons mappings here.
- * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
- * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
- */
-const MAPPING = {
+const MAPPING: Record<string, MaterialIconName> = {
   'house.fill': 'home',
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
-} as IconMapping;
+  'lungs.fill': 'air',
+  'lungs': 'air',
+  'antenna.radiowaves.left.and.right': 'bluetooth',
+  'heart.fill': 'favorite',
+  'play.fill': 'play-arrow',
+  'play.circle.fill': 'play-circle',
+  'chevron.down': 'expand-more',
+  'xmark.circle.fill': 'cancel',
+  'xmark': 'close',
+  'wifi.slash': 'wifi-off',
+  'magnifyingglass': 'search',
+  'clock': 'schedule',
+  'clock.fill': 'schedule',
+  'info.circle': 'info',
+  'exclamationmark.triangle.fill': 'warning',
+  'arrow.clockwise': 'refresh',
+  'calendar': 'today',
+  'calendar.badge.checkmark': 'check-circle',
+  'target': 'gps-fixed',
+  'link': 'link',
+  'chevron.left': 'chevron-left',
+  'stop.fill': 'stop',
+  'gearshape.fill': 'settings',
+  'square.and.arrow.down.fill': 'save',
+};
+
+type IconSymbolName = keyof typeof MAPPING | (string & {});
 
 /**
- * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
- * This ensures a consistent look across platforms, and optimal resource usage.
- * Icon `name`s are based on SF Symbols and require manual mapping to Material Icons.
+ * Icon: SF Symbol naam → Material Icons op web/Android. Onbekende namen → help-outline.
  */
 export function IconSymbol({
   name,
@@ -37,5 +55,6 @@ export function IconSymbol({
   style?: StyleProp<TextStyle>;
   weight?: SymbolWeight;
 }) {
-  return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
+  const materialName = MAPPING[name] ?? 'help';
+  return <MaterialIcons color={color} size={size} name={materialName} style={style} />;
 }

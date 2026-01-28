@@ -6,11 +6,14 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "types": ["jest", "@testing-library/jest-native"]
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    "**/__tests__/**/*.ts",
+    "**/__tests__/**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ]

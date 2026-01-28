@@ -1,11 +1,15 @@
 import { StyleSheet, Text, type TextProps } from 'react-native';
 
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Colors } from '@/constants/theme';
+import { getResponsiveFontSize } from '@/utils/responsive';
 
 export type ThemedTextProps = TextProps & {
   lightColor?: string;
   darkColor?: string;
-  type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link';
+  type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link' | 'caption';
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'error' | 'success' | 'warning';
 };
 
 export function ThemedText({
@@ -13,19 +17,47 @@ export function ThemedText({
   lightColor,
   darkColor,
   type = 'default',
+  variant,
   ...rest
 }: ThemedTextProps) {
-  const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+  const colorScheme = useColorScheme() ?? 'light';
+  const themeColors = Colors[colorScheme];
+
+  // Determine text color
+  let textColor = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+  if (variant) {
+    switch (variant) {
+      case 'primary':
+        textColor = themeColors.primary;
+        break;
+      case 'secondary':
+        textColor = themeColors.textSecondary;
+        break;
+      case 'tertiary':
+        textColor = themeColors.textTertiary;
+        break;
+      case 'error':
+        textColor = themeColors.error;
+        break;
+      case 'success':
+        textColor = themeColors.success;
+        break;
+      case 'warning':
+        textColor = themeColors.warning;
+        break;
+    }
+  }
 
   return (
     <Text
       style={[
-        { color },
+        { color: textColor },
         type === 'default' ? styles.default : undefined,
         type === 'title' ? styles.title : undefined,
         type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
         type === 'subtitle' ? styles.subtitle : undefined,
         type === 'link' ? styles.link : undefined,
+        type === 'caption' ? styles.caption : undefined,
         style,
       ]}
       {...rest}
@@ -35,26 +67,32 @@ export function ThemedText({
 
 const styles = StyleSheet.create({
   default: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: getResponsiveFontSize(16),
+    lineHeight: getResponsiveFontSize(24),
   },
   defaultSemiBold: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: getResponsiveFontSize(16),
+    lineHeight: getResponsiveFontSize(24),
     fontWeight: '600',
   },
   title: {
-    fontSize: 32,
+    fontSize: getResponsiveFontSize(32),
     fontWeight: 'bold',
-    lineHeight: 32,
+    lineHeight: getResponsiveFontSize(40),
   },
   subtitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: getResponsiveFontSize(20),
+    fontWeight: '600',
+    lineHeight: getResponsiveFontSize(28),
   },
   link: {
-    lineHeight: 30,
-    fontSize: 16,
-    color: '#0a7ea4',
+    lineHeight: getResponsiveFontSize(24),
+    fontSize: getResponsiveFontSize(16),
+    textDecorationLine: 'underline',
+  },
+  caption: {
+    fontSize: getResponsiveFontSize(12),
+    lineHeight: getResponsiveFontSize(16),
+    opacity: 0.7,
   },
 });
