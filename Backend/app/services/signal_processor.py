@@ -42,6 +42,8 @@ class SignalProcessor:
             buffer = self._ecg_buffers[session_id]
             buffer.append(ecg_record)
             
+            print(f"[SignalProcessor] Buffer size for session {session_id}: {len(buffer)} (threshold: {START_THRESHOLD})", flush=True)
+            
             # Get session to determine buffer size and parameters
             session_doc = await db.sessions.find_one({"session_id": session_id})
             if not session_doc:
@@ -50,15 +52,17 @@ class SignalProcessor:
             
             # Get parameter set for this session
             param_version = session_doc.get("param_version", "v1_default")
+            print(f"[SignalProcessor] Looking for param_version: '{param_version}'", flush=True)
             param_doc = await db.parameter_sets.find_one({"version": param_version})
             
             if not param_doc:
-                logger.warning(f"Parameter set {param_version} not found, using defaults")
+                print(f"[SignalProcessor] !! Parameter set '{param_version}' NOT FOUND, using defaults !!", flush=True)
                 params = {}
             else:
                 from app.schemas.parameter_set import ParameterSet
                 param_set = ParameterSet.from_dict(param_doc)
                 params = param_set.to_params_dict()
+                print(f"[SignalProcessor] Loaded params: HEARTBEAT_WINDOW={params.get('HEARTBEAT_WINDOW')}, BPM_MIN={params.get('BPM_MIN')}, BPM_MAX={params.get('BPM_MAX')}", flush=True)
             
             buffer_size = params.get("BUFFER_SIZE", 200)
             
@@ -70,6 +74,8 @@ class SignalProcessor:
             # Minimum buffer size before processing
             if len(buffer) < START_THRESHOLD:
                 return
+            
+            print(f"[SignalProcessor] >>> Processing {len(buffer)} ECG records for session {session_id}", flush=True)
             
             # Process ECG buffer
             try:
@@ -83,14 +89,20 @@ class SignalProcessor:
                 return
             
             if not result:
+                print(f"[SignalProcessor] !! estimate_from_records returned EMPTY result !!", flush=True)
                 return
             
+            est_rr_values = result.get('est_rr', [])
+            # Show last few values
+            last_values = [v for v in est_rr_values[-5:] if v is not None and np.isfinite(v)]
+            print(f"[SignalProcessor] Estimation succeeded, est_rr has {len(est_rr_values)} values, last values: {last_values}", flush=True)
+            
             # Get session info for target RR
-            target_rr = session_doc.get("target_rr", 0.0)
+            target_rr = session_doc.get("target_rr") or 0.0
             technique_name = session_doc.get("technique_name")
             # Get breath_cycle from most recent BreathTarget signal
             breath_cycle = None
-            if target_rr > 0:
+            if target_rr and target_rr > 0:
                 breath_target = await db.signals.find_one(
                     {"session_id": session_id, "signal": "BreathTarget"},
                     sort=[("ts", -1)]
@@ -127,6 +139,7 @@ class SignalProcessor:
                     dt = self._parse_dt_from_ts(ts_ms_int)
                     
                     # Create resp_rr signal
+                    print(f"[SignalProcessor] Creating resp_rr signal with estRR={float(v):.2f}", flush=True)
                     resp_rr_signal = SignalRecord(
                         device_id=ecg_record["device_id"],
                         signal="resp_rr",
@@ -193,11 +206,15 @@ class SignalProcessor:
                 
                 # Insert derived signals into database
                 if derived_signals:
+                    print(f"[SignalProcessor] >>> Inserting {len(derived_signals)} derived signals to DB", flush=True)
                     await db.signals.insert_many(derived_signals, ordered=False)
                     
                     # Broadcast all derived signals
                     for sig in derived_signals:
                         await stream_manager.broadcast(sig)
+                        print(f"[SignalProcessor] Broadcast: {sig.get('signal')} ts={sig.get('ts')}", flush=True)
+                else:
+                    print(f"[SignalProcessor] !! No derived signals generated (filtered out) !!", flush=True)
                 
                 # Update session last_emitted_ts
                 if last_emitted_ts > 0:

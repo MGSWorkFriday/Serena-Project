@@ -26,15 +26,13 @@ export class SSEClient {
       this.close();
     }
 
-    // Build URL with query parameters
+    // Build URL with query parameters (backend expects "signals" = comma-separated)
     const params = new URLSearchParams();
     if (this.options.deviceId) {
       params.append('device_id', this.options.deviceId);
     }
     if (this.options.signalTypes && this.options.signalTypes.length > 0) {
-      this.options.signalTypes.forEach((type) => {
-        params.append('signal', type);
-      });
+      params.append('signals', this.options.signalTypes.join(','));
     }
 
     const url = `${config.api.baseUrl}${config.api.v1Prefix}/stream?${params.toString()}`;

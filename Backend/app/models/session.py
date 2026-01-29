@@ -12,6 +12,7 @@ class SessionCreate(BaseModel):
     device_id: str = Field(..., description="Device identifier")
     technique_name: Optional[str] = Field(None, description="Breathing technique name")
     param_version: Optional[str] = Field(None, description="Parameter set version")
+    metadata: Optional[dict] = Field(None, description="Additional session metadata (e.g. protocol)")
 
 
 class SessionUpdate(BaseModel):
@@ -32,6 +33,7 @@ class SessionResponse(BaseModel):
     target_rr: Optional[float]
     status: str
     duration_seconds: Optional[float] = None
+    metadata: Optional[dict] = None
     
     class Config:
         from_attributes = True

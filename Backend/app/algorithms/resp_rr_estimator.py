@@ -179,7 +179,8 @@ def estimate_from_records(records: List[dict], fs_hint: float = 130.0, params: O
     if not all_samples:
         return None
 
-    sig_i16 = np.array(all_samples, dtype=np.int16)
+    # Use int32 to handle larger ECG values from Polar H10
+    sig_i16 = np.array(all_samples, dtype=np.int32)
     ts_arr = np.array(ts_list, dtype=np.int64) if ts_list else None
 
     try:

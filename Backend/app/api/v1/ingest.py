@@ -58,9 +58,13 @@ def parse_dt_from_ts(ts: int) -> str:
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest(request: Request):
     """Ingest sensor data (NDJSON or JSON array)"""
+    print("=" * 50, flush=True)
+    print("[INGEST] Request received!", flush=True)
+    print("=" * 50, flush=True)
     db = await get_database()
     
     ctype = request.headers.get("content-type", "").lower()
+    print(f"[INGEST] Content-Type: '{ctype}'", flush=True)
     accepted = 0
     active_session_id: Optional[str] = None
     
@@ -69,22 +73,27 @@ async def ingest(request: Request):
         
         if "application/x-ndjson" in ctype:
             # NDJSON format
+            print("[INGEST] Processing as NDJSON", flush=True)
             buf = b""
             async for chunk in request.stream():
                 if not chunk:
                     continue
                 buf += chunk
+                print(f"[INGEST] Received chunk, buf size: {len(buf)}", flush=True)
                 while True:
                     nl = buf.find(b"\n")
                     if nl < 0:
+                        print(f"[INGEST] No newline found in buf, waiting for more data", flush=True)
                         break
                     line = buf[:nl].strip()
                     buf = buf[nl + 1:]
                     if not line:
                         continue
                     
+                    print(f"[INGEST] Got line: {line[:100]}...", flush=True)
                     try:
                         data = json.loads(line)
+                        print(f"[INGEST] Parsed JSON, signal={data.get('signal')}", flush=True)
                         payload = [data] if isinstance(data, dict) else (data if isinstance(data, list) else None)
                         if payload:
                             for item in payload:
@@ -95,15 +104,37 @@ async def ingest(request: Request):
                                 records_to_insert.extend(signals)
                                 accepted += 1
                     except json.JSONDecodeError as e:
-                        logger.warning(f"JSON decode error: {e}")
+                        print(f"[INGEST] JSON decode error: {e}", flush=True)
                         continue
                     except Exception as e:
-                        logger.error(f"Error processing record: {e}", exc_info=True)
+                        print(f"[INGEST] Error processing: {e}", flush=True)
                         continue
+            # Process any remaining data in buffer (no trailing newline)
+            if buf.strip():
+                print(f"[INGEST] Processing remaining buffer: {len(buf)} bytes", flush=True)
+                try:
+                    data = json.loads(buf)
+                    print(f"[INGEST] Parsed remaining JSON, signal={data.get('signal') if isinstance(data, dict) else 'array'}", flush=True)
+                    payload = [data] if isinstance(data, dict) else (data if isinstance(data, list) else None)
+                    if payload:
+                        for item in payload:
+                            rec = RecordIngest(**item)
+                            session_id, signals = await process_record(rec, db)
+                            if session_id:
+                                active_session_id = session_id
+                            records_to_insert.extend(signals)
+                            accepted += 1
+                except json.JSONDecodeError as e:
+                    print(f"[INGEST] Final buffer JSON decode error: {e}", flush=True)
+                except Exception as e:
+                    print(f"[INGEST] Final buffer error: {e}", flush=True)
+            print(f"[INGEST] NDJSON done, accepted: {accepted}", flush=True)
         else:
             # JSON format
             payload = await request.json()
+            print(f"[INGEST] Payload type: {type(payload).__name__}, length: {len(payload) if isinstance(payload, list) else 'N/A'}", flush=True)
             if isinstance(payload, dict):
+                print(f"[INGEST] Single record, signal={payload.get('signal')}", flush=True)
                 rec = RecordIngest(**payload)
                 session_id, signals = await process_record(rec, db)
                 if session_id:
@@ -111,13 +142,17 @@ async def ingest(request: Request):
                 records_to_insert.extend(signals)
                 accepted += 1
             elif isinstance(payload, list):
+                print(f"[INGEST] Array of {len(payload)} records", flush=True)
                 for item in payload:
+                    print(f"[INGEST] Processing item, signal={item.get('signal')}", flush=True)
                     rec = RecordIngest(**item)
                     session_id, signals = await process_record(rec, db)
                     if session_id:
                         active_session_id = session_id
                     records_to_insert.extend(signals)
                     accepted += 1
+            else:
+                print(f"[INGEST] Unknown payload type: {type(payload)}", flush=True)
         
         # Insert all records
         if records_to_insert:
@@ -133,6 +168,7 @@ async def ingest(request: Request):
 async def process_record(rec: RecordIngest, db) -> tuple[Optional[str], List[dict]]:
     """Process a single record and return (session_id, signals_to_insert)"""
     device_id = rec.device_id or "UNKNOWN"
+    print(f"[process_record] signal={rec.signal}, device={device_id}, samples={len(rec.samples) if rec.samples else 0}", flush=True)
     
     # Parse timestamp
     ts = parse_timestamp(rec.ts)
@@ -144,6 +180,12 @@ async def process_record(rec: RecordIngest, db) -> tuple[Optional[str], List[dic
         "status": "active"
     })
     session_id = session_doc["session_id"] if session_doc else None
+    
+    if rec.signal == "ecg":
+        if session_doc:
+            print(f"[ingest] Found active session {session_id} for device {device_id}", flush=True)
+        else:
+            print(f"[ingest] !! NO ACTIVE SESSION for device_id={device_id} !!", flush=True)
     
     # Handle BreathTarget - update/create session
     if rec.signal == "BreathTarget":
@@ -214,12 +256,16 @@ async def process_record(rec: RecordIngest, db) -> tuple[Optional[str], List[dic
     
     # Process ECG signals for RR estimation (async, non-blocking)
     # Note: This runs in background, errors are logged but don't block ingest
-    if rec.signal == "ecg" and session_id:
-        try:
-            asyncio.create_task(
-                signal_processor.process_ecg_signal(signal_dict, session_id, db)
-            )
-        except Exception as e:
-            logger.warning(f"Failed to start ECG processing task: {e}")
+    if rec.signal == "ecg":
+        if session_id:
+            print(f"[ECG] Processing ecg for session {session_id}, device {device_id}", flush=True)
+            try:
+                asyncio.create_task(
+                    signal_processor.process_ecg_signal(signal_dict, session_id, db)
+                )
+            except Exception as e:
+                print(f"[ECG] Failed to start processing task: {e}", flush=True)
+        else:
+            print(f"[ECG] !! NO SESSION - ECG NOT PROCESSED for device {device_id} !!", flush=True)
     
     return session_id, [signal_dict]

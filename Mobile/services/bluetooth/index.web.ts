@@ -136,19 +136,33 @@ class PolarServiceWeb {
   async subscribeToECG(onData: (data: ECGData) => void): Promise<void> {
     if (!this.connectedDevice?.gatt?.connected) throw new Error('No device connected');
     this.onECG = onData;
+    console.log('[WebBLE] subscribeToECG: device connected, starting...');
 
     const server = this.connectedDevice.gatt!;
     const pmd = await server.getPrimaryService(POLAR_PMD_SERVICE_UUID);
+    console.log('[WebBLE] Got PMD service');
+    
     const ctrl = await pmd.getCharacteristic(POLAR_PMD_CONTROL_UUID);
+    console.log('[WebBLE] Got control characteristic, sending START_ECG_CMD...');
     await ctrl.writeValueWithResponse(START_ECG_CMD);
+    console.log('[WebBLE] START_ECG_CMD sent successfully');
 
     const dataChar = await pmd.getCharacteristic(POLAR_PMD_DATA_UUID);
+    console.log('[WebBLE] Got data characteristic, starting notifications...');
     await dataChar.startNotifications();
+    console.log('[WebBLE] Notifications started, waiting for ECG data events...');
+    
     dataChar.addEventListener('characteristicvaluechanged', (ev: Event) => {
+      console.log('[WebBLE] characteristicvaluechanged event received!');
       const dv = (ev.target as BluetoothRemoteGATTCharacteristic).value;
-      if (!dv || !this.onECG) return;
+      if (!dv || !this.onECG) {
+        console.log('[WebBLE] No DataView or no onECG callback');
+        return;
+      }
       const bytes = Array.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength));
+      console.log('[WebBLE] Raw bytes length:', bytes.length, 'first bytes:', bytes.slice(0, 10));
       const samples = parsePmdEcgBytes(bytes);
+      console.log('[WebBLE] Parsed samples:', samples.length);
       if (samples.length) this.onECG!({ timestamp: Date.now(), samples, sequenceNumber: this.ecgSequenceNumber++ });
     });
   }

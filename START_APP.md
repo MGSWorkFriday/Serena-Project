@@ -44,9 +44,11 @@ copy .env.example .env
 # 5. MongoDB starten
 docker-compose up -d mongodb
 
-# 6. Backend starten
+# 6. Backend starten (moet vanuit de map Backend!)
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+**Belangrijk:** Start uvicorn **altijd vanuit `D:\Serena\Backend`**. Als je vanuit `D:\Serena` (projectroot) start, krijg je `ModuleNotFoundError: No module named 'app'` — de module `app` staat in de Backend-map.
 
 Backend is bereikbaar op:
 
@@ -163,6 +165,7 @@ npm start
 |----------|-----------|
 | **`pip install -r requirements.txt` faalt** | Zie [Hieronder: pip install](#pip-install--r-requirementstxt-faalt). |
 | **`open //./pipe/dockerDesktopLinuxEngine: ... Het systeem kan het opgegeven bestand niet vinden`** of **`unable to get image`** bij `docker-compose up` | **Docker Desktop draait niet.** Start Docker Desktop, wacht tot het volledig opgestart is, en voer `docker-compose up -d mongodb` opnieuw uit. |
+| **`ModuleNotFoundError: No module named 'app'`** bij starten uvicorn | Je staat in de verkeerde map. Ga naar **Backend** en start dan opnieuw: `cd D:\Serena\Backend` (of `cd Backend` als je al in D:\Serena zit), daarna `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`. |
 | MongoDB connection failed | `docker-compose up -d mongodb` opnieuw; `docker ps` om te zien of de container draait. |
 | `ModuleNotFoundError` / importfouten in Backend | `pip install -r requirements.txt` in geactiveerde venv. |
 | Motor/PyMongo fout (Python 3.13) | Python 3.11 of 3.12 gebruiken. |

@@ -53,40 +53,24 @@ async def query_signals(
     return [SignalResponse(**sig) for sig in signals]
 
 
-@router.get("/recent", response_model=dict)
+@router.get("/recent", response_model=List[SignalResponse])
 async def get_recent_signals(
-    signal: str = Query("hr_est", description="Signal type"),
     device_id: Optional[str] = Query(None),
+    signal: Optional[str] = Query(None, description="Filter by signal type (ecg, hr_derived, resp_rr, etc.); omit for all types"),
     limit: int = Query(300, ge=1, le=1000),
 ):
-    """Get recent signals (replaces old /recent endpoint)"""
+    """Get recent signals for a device. Returns flat array; omit signal to get all types (ecg, hr_derived, resp_rr)."""
     db = await get_database()
-    
-    query = {"signal": signal}
+    query = {}
     if device_id:
         query["device_id"] = device_id
-    
+    if signal:
+        query["signal"] = signal
     cursor = db.signals.find(query).sort("ts", -1).limit(limit)
     signals = await cursor.to_list(length=limit)
-    
-    # Format response similar to old endpoint
-    items = []
-    for sig in reversed(signals):  # Oldest first
-        if signal in ("hr_est", "hr_derived"):
-            items.append({
-                "ts": sig["ts"],
-                "bpm": sig.get("bpm")
-            })
-        else:
-            item = sig.copy()
-            item["ts"] = sig["ts"]
-            items.append(item)
-    
-    return {
-        "signal": signal,
-        "count": len(items),
-        "items": items
-    }
+    for sig in signals:
+        sig["_id"] = str(sig["_id"])
+    return [SignalResponse(**s) for s in signals]
 
 
 @router.get("/{signal_id}", response_model=SignalResponse)

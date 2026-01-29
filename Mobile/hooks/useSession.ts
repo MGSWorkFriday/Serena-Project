@@ -30,16 +30,29 @@ export function useSessionState(sessionId?: string): UseSessionReturn {
   const { data: session, isLoading, error } = useSession(sessionId || activeSession?.session_id || null);
   const endSessionMutation = useEndSession();
 
-  // Get latest signals
-  const { bpm } = useLatestHR(deviceId || undefined);
-  const { estRR } = useLatestRR(deviceId || undefined);
+  // Polling fallback for HR and RR
+  const { bpm: bpmPolled } = useLatestHR(deviceId || undefined);
+  const { estRR: estRRPolled } = useLatestRR(deviceId || undefined);
 
-  // Stream real-time signals
+  // Stream real-time signals (BPM, HR, guidance from backend)
   const { getLatestSignal } = useSignalStream({
     deviceId: deviceId || undefined,
     signalTypes: ['guidance', 'resp_rr', 'hr_derived'],
     enabled: !!session && session.status === 'active',
   });
+
+  // Prefer stream data for real-time display; fall back to polling
+  const hrSignal = getLatestSignal('hr_derived');
+  const rrSignal = getLatestSignal('resp_rr');
+  
+  // Debug logging
+  if (rrSignal) {
+    console.log('[useSession] resp_rr signal:', JSON.stringify(rrSignal));
+  }
+  console.log('[useSession] estRRPolled:', estRRPolled);
+  
+  const heartRate = hrSignal?.bpm ?? bpmPolled;
+  const actualRR = rrSignal?.estRR ?? estRRPolled;
 
   // Get latest guidance
   const latestGuidanceSignal = getLatestSignal('guidance');
@@ -61,8 +74,8 @@ export function useSessionState(sessionId?: string): UseSessionReturn {
     session: session || null,
     isLoading,
     error: error as Error | null,
-    heartRate: bpm,
-    actualRR: estRR,
+    heartRate,
+    actualRR,
     targetRR: session?.target_rr,
     latestGuidance,
     endSession,

@@ -15,6 +15,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useSessionState } from '@/hooks/useSession';
 import { useSignalStream } from '@/hooks/useSignalStream';
 import { useBluetooth } from '@/hooks/useBluetooth';
+import { useECGIngest } from '@/hooks/useECGIngest';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { audioService } from '@/services/audio/audioService';
@@ -23,9 +24,16 @@ export default function SessionScreen() {
   const params = useLocalSearchParams<{ sessionId?: string }>();
   const { session, heartRate, actualRR, targetRR, latestGuidance, endSession, isLoading, isEnding } =
     useSessionState(params.sessionId);
-  const { deviceId } = useBluetooth();
+  const { deviceId, connected } = useBluetooth();
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [showCharts, setShowCharts] = useState(false);
+
+  // Send Polar ECG to backend when session is active; backend computes BPM and heart rate
+  useECGIngest({
+    sessionId: session?.session_id ?? null,
+    deviceId: session?.device_id ?? deviceId ?? null,
+    enabled: !!(session && session.status === 'active' && (session.device_id || deviceId) && connected),
+  });
 
   // Get real-time signals for charts
   const { signals: chartSignals } = useSignalStream({
@@ -38,6 +46,27 @@ export default function SessionScreen() {
   useEffect(() => {
     audioService.setEnabled(audioEnabled);
   }, [audioEnabled]);
+
+  // Close session when browser/tab is closed (web only)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !session?.session_id) return;
+
+    const handleBeforeUnload = () => {
+      // Use fetch with keepalive for reliable session close on page unload
+      const url = `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/sessions/${session.session_id}/end`;
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [session?.session_id]);
 
   useEffect(() => {
     if (latestGuidance?.audioText && audioEnabled) {
@@ -74,14 +103,29 @@ export default function SessionScreen() {
     }
   };
 
-  // Get breath cycle from session metadata or use defaults
-  // The breath_cycle might be stored in session metadata or we need to fetch from latest BreathTarget signal
-  const breathCycle = (session?.metadata as any)?.breath_cycle || {
-    in: 4,
-    out: 4,
-    hold1: 0,
-    hold2: 0,
-  };
+  // Get breath cycle from session metadata protocol
+  // Protocol format: [[in, hold1, out, hold2, repeats], ...] - use first step
+  const protocol = (session?.metadata as any)?.protocol;
+  const breathCycle = (() => {
+    console.log('[Session] Raw protocol from metadata:', JSON.stringify(protocol));
+    if (protocol && Array.isArray(protocol) && protocol.length > 0) {
+      const step = protocol[0]; // Use first step
+      console.log('[Session] First step:', JSON.stringify(step));
+      if (Array.isArray(step) && step.length >= 4) {
+        const cycle = {
+          in: step[0] || 4,
+          hold1: step[1] || 0,
+          out: step[2] || 4,
+          hold2: step[3] || 0,
+        };
+        console.log('[Session] Extracted breathCycle:', JSON.stringify(cycle));
+        return cycle;
+      }
+    }
+    console.log('[Session] Using default breathCycle');
+    // Default fallback
+    return { in: 4, out: 4, hold1: 0, hold2: 0 };
+  })();
 
   if (isLoading) {
     return (

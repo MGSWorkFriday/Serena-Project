@@ -5,10 +5,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/services/api';
 import type { Session, SessionCreate, SessionUpdate } from '@/services/api/types';
 
-export function useSessions(deviceId?: string) {
+export interface UseSessionsOptions {
+  deviceId?: string;
+  status?: 'active' | 'completed' | 'cancelled';
+}
+
+export function useSessions(options?: UseSessionsOptions) {
+  const { deviceId, status } = options || {};
   return useQuery({
-    queryKey: ['sessions', deviceId],
-    queryFn: () => apiClient.getSessions(deviceId ? { device_id: deviceId } : undefined),
+    queryKey: ['sessions', deviceId, status],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (deviceId) params.device_id = deviceId;
+      if (status) params.status = status;
+      return apiClient.getSessions(Object.keys(params).length > 0 ? params : undefined);
+    },
     staleTime: 10 * 1000, // 10 seconds
   });
 }

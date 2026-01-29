@@ -20,7 +20,7 @@ import { TechniqueDetailModal } from '@/components/techniques/TechniqueDetailMod
 import { useTechniques } from '@/hooks/useTechniques';
 import { useBluetooth } from '@/hooks/useBluetooth';
 import { config } from '@/constants/config';
-import { useCreateSession } from '@/hooks/useSessions';
+import { useCreateSession, useEndSession, useSessions } from '@/hooks/useSessions';
 import { router } from 'expo-router';
 import type { Technique } from '@/services/api/types';
 
@@ -31,6 +31,10 @@ export default function TechniquesScreen() {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const { deviceId, connected } = useBluetooth();
   const createSessionMutation = useCreateSession();
+  const endSessionMutation = useEndSession();
+  
+  // Get active sessions to close before starting new one
+  const { data: activeSessions } = useSessions({ deviceId: deviceId || undefined, status: 'active' });
 
   const { data: techniques, isLoading, isError, error, refetch } = useTechniques(true);
 
@@ -63,6 +67,18 @@ export default function TechniquesScreen() {
     }
 
     try {
+      // Close any active sessions first
+      if (activeSessions && activeSessions.length > 0) {
+        console.log('[Techniques] Closing active sessions before starting new one');
+        for (const activeSession of activeSessions) {
+          try {
+            await endSessionMutation.mutateAsync(activeSession.session_id);
+          } catch (err) {
+            console.warn('[Techniques] Failed to end session:', activeSession.session_id, err);
+          }
+        }
+      }
+
       // Create session with technique
       const session = await createSessionMutation.mutateAsync({
         device_id: deviceId,

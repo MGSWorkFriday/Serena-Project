@@ -52,6 +52,7 @@ async def create_session(session_data: SessionCreate):
         device_id=session_data.device_id,
         technique_name=session_data.technique_name,
         param_version=session_data.param_version or "v1_default",
+        metadata=session_data.metadata,
     )
     
     result = await db.sessions.insert_one(session.to_dict())
