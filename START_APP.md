@@ -4,6 +4,71 @@ Korte handleiding om **Backend** (FastAPI + MongoDB) en **Mobile** (Expo/React N
 
 ---
 
+## 0. Eerste keer op jouw PC (setup)
+
+Als je het project **voor het eerst** op je eigen Cursor/PC wilt draaien (bijv. overgenomen van een collega), doorloop dan onderstaande checklist. Daarna kun je sectie 1 t/m 6 gebruiken om te starten.
+
+**Projectpad in deze docu:** `c:\proj\Serena-Project` (pas aan als jouw map anders heet).
+
+### Checklist
+
+| # | Wat | Actie |
+|---|-----|--------|
+| 1 | **Python** | Gebruik **3.11 of 3.12** (niet 3.13 i.v.m. motor/pymongo en numpy). Controle: `py -0` of `python --version`. Zo nodig: [python.org](https://www.python.org/downloads/) → 3.11.x of 3.12.x, bij install **“Add Python to PATH”** aanvinken. |
+| 2 | **Node.js** | Voor Mobile (Expo). LTS 18 of 20. Controle: `node -v` en `npm -v`. Zo nodig: [nodejs.org](https://nodejs.org/). |
+| 3 | **Docker Desktop** | Voor MongoDB. Installeer en start Docker Desktop; moet **draaien** vóór je de Backend start. Controle: `docker --version`. |
+| 4 | **Backend – venv** | Eén keer: maak een virtual environment in de Backend-map. |
+| 5 | **Backend – libraries** | Installeer Python-afhankelijkheden in die venv. |
+| 6 | **Backend – .env** | Kopieer `.env.example` naar `.env` (optioneel; er zijn defaults). |
+| 7 | **Mobile – libraries** | Installeer npm-pakketten in de Mobile-map. |
+| 8 | **Mobile – .env** | Optioneel: kopieer `.env.example` naar `.env` voor API-URL (vooral nodig bij fysieke telefoon). |
+
+### Uitvoeren (PowerShell)
+
+```powershell
+# --- Backend (eenmalig) ---
+cd c:\proj\Serena-Project\Backend
+
+# Python-versie controleren (moet 3.11 of 3.12 zijn)
+python --version
+# of: py -3.11 --version
+
+# Virtual environment aanmaken
+python -m venv venv
+# of als je meerdere Python-versies hebt: py -3.11 -m venv venv
+
+# Venv activeren
+.\venv\Scripts\activate
+
+# Dependencies installeren
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
+# .env (optioneel)
+copy .env.example .env
+# Pas .env aan als je andere MongoDB-poort/credentials wilt
+
+# --- Mobile (eenmalig) ---
+cd c:\proj\Serena-Project\Mobile
+
+npm install
+
+# .env voor API-URL (optioneel; voor fysiek apparaat zie sectie 3)
+copy .env.example .env
+```
+
+### Controleren
+
+- **Python:** `python --version` → 3.11.x of 3.12.x  
+- **Backend deps:** `cd Backend`, `.\venv\Scripts\activate`, `pip list` → o.a. fastapi, uvicorn, motor, pymongo, numpy, scipy  
+- **Node:** `node -v`, `npm -v`  
+- **Mobile deps:** `cd Mobile`, `npm list` (geen errors)  
+- **Docker:** Docker Desktop open, daarna `docker ps` (mag leeg zijn, maar geen “cannot connect”)
+
+Daarna: **sectie 1** (Backend starten) en **sectie 2** (Mobile starten). Bij problemen: **sectie 6** (Troubleshooting).
+
+---
+
 ## Overzicht
 
 | Component | Poort | Doel |
@@ -13,6 +78,20 @@ Korte handleiding om **Backend** (FastAPI + MongoDB) en **Mobile** (Expo/React N
 | **Mobile (Expo)** | 8081 (Metro) | App (device/simulator of web) |
 
 De Mobile app praat met de Backend op `http://localhost:8000` (of je PC-IP op een fysiek apparaat).
+
+---
+
+## Na een reboot van je ontwikkel-PC
+
+Na een herstart hoef je alleen dit te doen (geen venv/pip/npm install opnieuw):
+
+| # | Wat | Actie |
+|---|-----|--------|
+| 1 | **Docker Desktop** | Start Docker Desktop en wacht tot het volledig opgestart is (icoon stabiel in systray). |
+| 2 | **Backend** | Dubbelklik `start_backend.cmd` in de projectroot, of open een terminal en voer het uit. Laat het venster open (uvicorn draait daar). |
+| 3 | **Mobile** | Dubbelklik `start_mobile.cmd` (of open een tweede terminal en voer het uit). Laat het venster open (Expo draait daar). |
+
+De bestanden `start_backend.cmd` en `start_mobile.cmd` staan in `c:\proj\Serena-Project\`. Je kunt ze ook vanuit de projectroot in twee aparte terminals draaien.
 
 ---
 
@@ -28,7 +107,7 @@ De Mobile app praat met de Backend op `http://localhost:8000` (of je PC-IP op ee
 
 ```powershell
 # 1. Ga naar Backend
-cd d:\Serena\Backend
+cd c:\proj\Serena-Project\Backend
 
 # 2. (Eerste keer) Virtual environment
 python -m venv venv
@@ -48,7 +127,7 @@ docker-compose up -d mongodb
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Belangrijk:** Start uvicorn **altijd vanuit `D:\Serena\Backend`**. Als je vanuit `D:\Serena` (projectroot) start, krijg je `ModuleNotFoundError: No module named 'app'` — de module `app` staat in de Backend-map.
+**Belangrijk:** Start uvicorn **altijd vanuit `c:\proj\Serena-Project\Backend`**. Als je vanuit `c:\proj\Serena-Project` (projectroot) start, krijg je `ModuleNotFoundError: No module named 'app'` — de module `app` staat in de Backend-map.
 
 Backend is bereikbaar op:
 
@@ -70,7 +149,7 @@ Backend is bereikbaar op:
 
 ```powershell
 # 1. Ga naar Mobile
-cd d:\Serena\Mobile
+cd c:\proj\Serena-Project\Mobile
 
 # 2. (Eerste keer) Dependencies
 npm install
@@ -141,10 +220,12 @@ Op een **fysieke telefoon** is `localhost` het toestel zelf, niet je PC. De app 
 
 ## 5. Handige commands (kopieer & plak)
 
+**Snel (na reboot):** dubbelklik `start_backend.cmd` en daarna `start_mobile.cmd` in de projectroot (zie [Na een reboot](#na-een-reboot-van-je-ontwikkel-pc)).
+
 **Terminal 1 – Backend**
 
 ```powershell
-cd d:\Serena\Backend
+cd c:\proj\Serena-Project\Backend
 .\venv\Scripts\activate
 docker-compose up -d mongodb
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -153,7 +234,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 **Terminal 2 – Mobile**
 
 ```powershell
-cd d:\Serena\Mobile
+cd c:\proj\Serena-Project\Mobile
 npm start
 ```
 
@@ -165,7 +246,7 @@ npm start
 |----------|-----------|
 | **`pip install -r requirements.txt` faalt** | Zie [Hieronder: pip install](#pip-install--r-requirementstxt-faalt). |
 | **`open //./pipe/dockerDesktopLinuxEngine: ... Het systeem kan het opgegeven bestand niet vinden`** of **`unable to get image`** bij `docker-compose up` | **Docker Desktop draait niet.** Start Docker Desktop, wacht tot het volledig opgestart is, en voer `docker-compose up -d mongodb` opnieuw uit. |
-| **`ModuleNotFoundError: No module named 'app'`** bij starten uvicorn | Je staat in de verkeerde map. Ga naar **Backend** en start dan opnieuw: `cd D:\Serena\Backend` (of `cd Backend` als je al in D:\Serena zit), daarna `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`. |
+| **`ModuleNotFoundError: No module named 'app'`** bij starten uvicorn | Je staat in de verkeerde map. Ga naar **Backend** en start dan opnieuw: `cd c:\proj\Serena-Project\Backend` (of `cd Backend` als je al in c:\proj\Serena-Project zit), daarna `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`. |
 | MongoDB connection failed | `docker-compose up -d mongodb` opnieuw; `docker ps` om te zien of de container draait. |
 | `ModuleNotFoundError` / importfouten in Backend | `pip install -r requirements.txt` in geactiveerde venv. |
 | Motor/PyMongo fout (Python 3.13) | Python 3.11 of 3.12 gebruiken. |
@@ -193,7 +274,7 @@ Je gebruikt **Python 3.13**. Voor 3.13 bestaan er (nog) geen kant‑en‑klare W
 
    **PowerShell:**
    ```powershell
-   cd D:\Serena\Backend
+   cd c:\proj\Serena-Project\Backend
    deactivate
    Remove-Item -Recurse -Force venv
    py -3.11 -m venv venv
@@ -201,7 +282,7 @@ Je gebruikt **Python 3.13**. Voor 3.13 bestaan er (nog) geen kant‑en‑klare W
 
    **Command Prompt (cmd):**
    ```cmd
-   cd D:\Serena\Backend
+   cd c:\proj\Serena-Project\Backend
    deactivate
    rmdir /s /q venv
    py -3.11 -m venv venv
@@ -228,7 +309,7 @@ Je gebruikt **Python 3.13**. Voor 3.13 bestaan er (nog) geen kant‑en‑klare W
 1. **Venv actief**  
    Zorg dat je in de Backend-venv zit:
    ```powershell
-   cd D:\Serena\Backend
+   cd c:\proj\Serena-Project\Backend
    .\venv\Scripts\activate
    pip install -r requirements.txt
    ```
@@ -259,7 +340,7 @@ Je gebruikt **Python 3.13**. Voor 3.13 bestaan er (nog) geen kant‑en‑klare W
 Voor een DB-UI (development):
 
 ```powershell
-cd d:\Serena\Backend
+cd c:\proj\Serena-Project\Backend
 docker-compose --profile tools up -d mongo-express
 ```
 
